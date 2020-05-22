@@ -1,0 +1,7 @@
+FROM lua_resty_netacea:latest
+
+RUN /usr/local/openresty/luajit/bin/luarocks install busted
+RUN /usr/local/openresty/luajit/bin/luarocks install luacov
+RUN /usr/local/openresty/luajit/bin/luarocks install cluacov
+RUN /usr/local/openresty/luajit/bin/luarocks install require
+RUN /usr/local/openresty/luajit/bin/luarocks install luacheck

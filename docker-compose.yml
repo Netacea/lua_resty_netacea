@@ -1,0 +1,40 @@
+version: '3.5'
+
+services:
+  resty:
+    image: lua_resty_netacea:latest
+    build:
+      dockerfile: Dockerfile
+      context: .
+    container_name: resty
+    ports:
+     - "8080:80"
+     - "443:443"
+    volumes:
+     - "./src/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf"
+     - "./src/lua_resty_netacea.lua:/usr/local/openresty/site/lualib/lua_resty_netacea.lua"
+
+  test:
+    build:
+      dockerfile: Dockerfile.test
+      context: .
+    volumes:
+      - "./src:/usr/src/src"
+      - "./test:/usr/src/test"
+      - "./run_lua_tests.sh:/usr/src/run_lua_tests.sh"
+    security_opt:
+      - seccomp:unconfined
+    command: bash -c '. /usr/src/run_lua_tests.sh -s; exit $$?'
+
+  lint:
+    build:
+      dockerfile: Dockerfile.test
+      context: .
+    volumes:
+      - "./.luacheckrc:/usr/src/.luacheckrc"
+      - "./src:/usr/src/src"
+      - "./test:/usr/src/test"
+      - "./run_lua_tests.sh:/usr/src/run_lua_tests.sh"
+    security_opt:
+      - seccomp:unconfined
+    command: sh -c 'cd /usr/src && luacheck --no-self -- /usr/src'
