@@ -32,7 +32,7 @@ http {
     netacea:ingest()
   }
   access_by_lua_block {
-    netacea:mitigate()
+    netacea:inject()
   }
 
   server {
