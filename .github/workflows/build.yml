@@ -8,7 +8,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@master
       - name: Build Image
-        run: docke-compose build
+        run: docker-compose build
       - name: Lint
         run: docker-compose run lint
       - name: Test
