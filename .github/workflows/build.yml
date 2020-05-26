@@ -1,21 +1,13 @@
 name: lua-resty-netacea-build
 on: [push, pull_request]
 jobs:
-  lint:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    name: 'Lint'
     steps:
       - name: Checkout
         uses: actions/checkout@master
       - name: Lint
         run: docker-compose up --exit-code-from lint
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    name: 'Test'
-    steaps:
-      - name: Checkout
-        usees: actions/checkout@master
       - name: Test
         run: docker-compose up --exit-code-from test
