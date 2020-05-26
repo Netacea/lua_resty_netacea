@@ -8,7 +8,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@master
       - name: Build Image
-        run: docker build . --tag lua_resty_netacea:latest
+        run: docke-compose build
       - name: Lint
         run: docker-compose run lint
       - name: Test
