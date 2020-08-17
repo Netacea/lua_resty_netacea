@@ -1,5 +1,5 @@
 package = "lua_resty_netacea"
-version = "0.0-1"
+version = "0.0-2"
 source = {
   url = "git://github.com/Netacea/lua_resty_netacea",
   branch = "master"
@@ -14,7 +14,8 @@ dependencies = {
   "lua >= 5.1, < 5.4",
   "luaossl",
   "lua-resty-http",
-  "lbase64"
+  "lbase64",
+  "lua-cjson"
 }
 external_dependencies = {}
 build = {
