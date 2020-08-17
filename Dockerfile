@@ -12,7 +12,7 @@ RUN apt-get install -y libssl-dev
 
 RUN cd $HOME
 
-COPY ./lua_resty_netacea.rockspec ./
+COPY ./lua_resty_netacea-0.0-2.rockspec ./
 COPY ./src ./src
 
-RUN /usr/local/openresty/luajit/bin/luarocks make ./lua_resty_netacea.rockspec
+RUN /usr/local/openresty/luajit/bin/luarocks make ./lua_resty_netacea-0.0-2.rockspec
