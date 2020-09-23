@@ -512,7 +512,7 @@ function _N:ingest()
   request_params.body  = cjson.encode(data);
   request_params.method  = "POST";
   request_params.headers = {
-        ["Content-Length"] = #request_body,
+        ["Content-Length"] = #request_params.body,
         ["Content-Type"] = "application/json",
         ["x-netacea-api-key"] = self.apiKey;
   }
