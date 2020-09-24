@@ -65,6 +65,8 @@ function _N:new(options)
 
   self.endpointIndex = 0
 
+  _N:start_timers();
+  
   return n
 end
 
@@ -334,6 +336,158 @@ function _N:setBcType(match, mitigate, captcha)
   return mitigationApplied
 end
 
+----------------------------------------------------------------------
+-- start STASH code to enable async HTTP requests from logging context
+
+local function new_queue(size, allow_wrapping)
+    -- Head is next insert, tail is next read
+    local head, tail = 1, 1;
+    local items = 0; -- Number of stored items
+    local t = {}; -- Table to hold items
+    return {
+        _items = t;
+        size = size;
+        count = function (self) return items; end;
+        push = function (self, item)
+            if items >= size then
+              if allow_wrapping then
+                tail = (tail%size)+1; -- Advance to next oldest item
+                items = items - 1;
+              else
+                return nil, "queue full";
+              end
+            end
+            t[head] = item;
+            items = items + 1;
+            head = (head%size)+1;
+            return true;
+        end;
+        pop = function (self)
+            if items == 0 then
+              return nil;
+            end
+            local item;
+            item, t[tail] = t[tail], 0;
+            tail = (tail%size)+1;
+            items = items - 1;
+            return item;
+        end;
+        peek = function (self)
+            if items == 0 then
+              return nil;
+            end
+            return t[tail];
+        end;
+        items = function (self)
+            return function (t, pos)
+              if pos >= t:count() then
+                return nil;
+              end
+              local read_pos = tail + pos;
+              if read_pos > t.size then
+                read_pos = (read_pos%size);
+              end
+              return pos+1, t._items[read_pos];
+            end, self, 0;
+        end;
+    };
+end
+
+local core       = require "resty.core";
+local semaphore  = require "ngx.semaphore";
+
+local async_queue_low_priority = new_queue(5000, true);
+local queue_sema_low_priority  = semaphore.new();
+local requests_sema            = semaphore.new();
+
+requests_sema:post(1024); -- allow up to 1024 sending timer contexts
+
+--------------------------------------------------------
+-- start timers to execute requests tasks
+ 
+function _N:start_timers()
+
+    -- start requests executor
+    local executor;
+    executor = function( premature )
+
+        if premature then return end
+        
+        local execution_thread = ngx.thread.spawn( function()
+
+                while true do
+                    while async_queue_low_priority:count() == 0 do
+                        if ngx.worker.exiting() == true then return end
+                        
+                        queue_sema_low_priority:wait(0.3); -- sleeping for 300 milliseconds
+                    end
+                                        
+                    repeat
+                        if ngx.worker.exiting() == true then return end
+
+                        -- to make sure that there are only up to 1024 executor's timers at any time
+                        local ok, err = requests_sema:wait(0.1);
+                    until ok and ok == true;
+                    
+                    local task = async_queue_low_priority:pop();
+                    if task then
+                        -- run tasks in separate timer contexts to avoid accumulating large numbers of dead corutines
+                        ngx.timer.at( 0, function()
+                            local ok, err = pcall( task );
+                            if not ok and err then
+                                ngx.log( ngx.ERR, "NETACEA API - sending task has failed with error: ", err );
+                            end
+                            
+                            local cnt = 1;
+                            
+                            while async_queue_low_priority:count() > 0 and cnt < 100 do
+                                if ngx.worker.exiting() == true then return end
+                                
+                                local next_task = async_queue_low_priority:pop();
+                  
+                                if not next_task then
+                                   queue_sema_low_priority:wait(0.3); -- sleeping for 300 milliseconds
+                                   next_task = async_queue_low_priority:pop();  
+                                end
+                  
+                                if next_task then
+                                    ok, err = pcall( next_task );
+                                    if not ok and err then
+                                        ngx.log( ngx.ERR, "NETACEA - sending task has failed with error: ", err );
+                                    else
+                                        ngx.sleep(0.01);
+                                    end
+                                else
+                                    if queue_sema_low_priority:count() > async_queue_low_priority:count() then queue_sema_low_priority:wait(0) end
+                                    break;
+                                end
+                                
+                                cnt = cnt + 1;
+                            end
+                            
+                            requests_sema:post(1);
+                        end );                        
+                    else -- semaphore is out of sync with queue - need to drain it
+                        if queue_sema_low_priority:count() > async_queue_low_priority:count() then queue_sema_low_priority:wait(0) end
+                        requests_sema:post(1);
+                    end
+                                        
+                end        
+        end );
+        
+        local ok, err = ngx.thread.wait( execution_thread );
+        if not ok and err then
+            ngx.log( ngx.ERR, "NETACEA - executor thread has failed with error: ", err );
+        end
+        
+        ngx.timer.at( 0, executor );
+    end
+    
+    ngx.timer.at( 0, executor );
+
+end
+-- end STASH code
+
 function _N:ingest()
   if not self.ingestEnabled then return nil end
   local vars = ngx.var
@@ -352,19 +506,39 @@ function _N:ingest()
     NetaceaMitigationApplied = ngx.ctx.bc_type
   }
 
-  local command = table.concat({
-    "curl",
-    "-X POST",
-    "-m 5",
-    "-s",
-    "-o /dev/null",
-  "-H 'Content-Type:application/json'",
-    "-H 'x-netacea-api-key:" .. self.apiKey .. "'",
-    "-d '" .. cjson.encode(data) .. "'",
-    self.ingestEndpoint
-  }, " ")
+  -- start STASH code
+  local request_params = {};
+    
+  request_params.body  = cjson.encode(data);
+  request_params.method  = "POST";
+  request_params.headers = {
+        ["Content-Length"] = #request_params.body,
+        ["Content-Type"] = "application/json",
+        ["x-netacea-api-key"] = self.apiKey;
+  }
+  request_params.timeout = 1000; -- 1 second
 
-  os.execute(command .. " &")
+  local request_task = function()
+        local hc = http:new();
+        
+        local res, err = hc:request_uri( self.ingestEndpoint, request_params );
+        
+        if not res and err then
+            ngx.log( ngx.ERR, "Netacea ingest - failed API request - error: ", err );
+            return;
+        else
+            if res.status ~= 200 and res.status ~= 201 then
+                ngx.log( ngx.ERR, "Netacea ingest - failed API request - status: ", res.status );
+                return;
+            end
+        end    
+  end
+  
+  -- request_params are not going to get deallocated as long as function stays in the queue
+  local ok, err = async_queue_low_priority:push( request_task );
+  if ok then queue_sema_low_priority:post(1) end
+
+  -- end STASH code
 end
 
 _N['idTypesText'] = {}
