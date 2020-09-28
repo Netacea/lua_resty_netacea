@@ -393,7 +393,6 @@ local function new_queue(size, allow_wrapping)
     };
 end
 
-local core       = require "resty.core";
 local semaphore  = require "ngx.semaphore";
 
 local async_queue_low_priority = new_queue(5000, true);
@@ -403,7 +402,7 @@ local requests_sema            = semaphore.new();
 requests_sema:post(1024); -- allow up to 1024 sending timer contexts
 
 --------------------------------------------------------
--- start timers to execute requests tasksq
+-- start timers to execute requests tasks
 
 function _N:start_timers()
 
