@@ -14,6 +14,9 @@ events {
 
 http {
   lua_package_path "/usr/local/share/lua/5.1/?.lua;;";
+  lua_max_running_timers  2048;
+  lua_max_pending_timers  4096;
+  lua_socket_pool_size    1024;
   lua_need_request_body on;
   resolver 8.8.8.8 ipv6=off;
   lua_ssl_verify_depth 2;
@@ -57,6 +60,9 @@ events {
 
 http {
   lua_package_path "/usr/local/share/lua/5.1/?.lua;;";
+  lua_max_running_timers  2048;
+  lua_max_pending_timers  4096;
+  lua_socket_pool_size    1024;
   lua_need_request_body on;
   resolver 8.8.8.8 ipv6=off;
   lua_ssl_verify_depth 2;
