@@ -13,11 +13,12 @@ events {
 }
 
 http {
+  lua_package_path "/usr/local/share/lua/5.1/?.lua;;";
   lua_need_request_body on;
   resolver 8.8.8.8 ipv6=off;
   lua_ssl_verify_depth 2;
   lua_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-  init_by_lua_block {
+  init_worker_by_lua_block {
     netacea = (require 'lua_resty_netacea'):new({
       ingestEndpoint     = 'ingest-endpoint',
       mitigationEndpoint = 'mitigation-endpoint',
@@ -55,11 +56,12 @@ events {
 }
 
 http {
+  lua_package_path "/usr/local/share/lua/5.1/?.lua;;";
   lua_need_request_body on;
   resolver 8.8.8.8 ipv6=off;
   lua_ssl_verify_depth 2;
   lua_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-  init_by_lua_block {
+  init_worker_by_lua_block {
     netacea = (require 'lua_resty_netacea'):new({
       ingestEndpoint     = 'ingest-endpoint',
       mitigationEndpoint = 'mitigation-endpoint',

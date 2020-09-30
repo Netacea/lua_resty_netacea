@@ -409,7 +409,7 @@ function _N:start_timers()
   -- start requests executor
   local executor;
   executor = function( premature )
-  
+
     if premature then return end
     local execution_thread = ngx.thread.spawn( function()
 
