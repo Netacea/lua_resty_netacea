@@ -517,7 +517,7 @@ function _N:ingest()
         ["Content-Length"] = #request_params.body,
         ["Content-Type"] = "application/json",
         ["x-netacea-api-key"] = self.apiKey;
-  }
+  };
   request_params.timeout = 1000; -- 1 second
 
   local request_task = function()
