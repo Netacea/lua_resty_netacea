@@ -1,0 +1,80 @@
+FROM centos:7
+
+LABEL author="Mark Greenwood <mark.greenwood@netacea.com>"
+LABEL maintainer="Mark Greenwood <mark.greenwood@netacea.com>"
+
+USER root
+
+WORKDIR /usr/src
+
+## Install required packages
+RUN yum update && yum install -y \
+    wget \
+    gcc \
+    gcc-c++ \
+    make \
+    pcre-devel \
+    zlib \
+    unzip \
+    openssl-devel
+
+## Download relevant lua/nginx/openresty modules
+RUN wget https://github.com/openresty/luajit2/archive/v2.1-20200102.tar.gz -O luajit2-2.1-20200102.tar.gz&&\
+    wget https://github.com/vision5/ngx_devel_kit/archive/v0.3.1.tar.gz -O ngx_devel-v0.3.1.tar.gz &&\
+    wget https://github.com/openresty/lua-nginx-module/archive/v0.10.17.tar.gz  -O lua-nginx-module-v0.10.17.tar.gz &&\
+    wget https://nginx.org/download/nginx-1.18.0.tar.gz &&\
+    wget https://github.com/openresty/lua-resty-core/archive/v0.1.19.tar.gz -O lua-resty-core-0.1.19.tar.gz &&\
+    wget https://github.com/openresty/lua-resty-lrucache/archive/v0.10.tar.gz -O lua-resty-lrucache-0.10.tar.gz
+
+## Install luaJit from recommended project
+RUN tar zxf luajit2-2.1-20200102.tar.gz &&\
+    cd luajit2-2.1-20200102 &&\
+    make &&\
+    make install
+
+# Install ngx_devel package
+RUN tar zxf ngx_devel-v0.3.1.tar.gz &&\
+    tar zxf lua-nginx-module-v0.10.17.tar.gz &&\
+    tar xzf nginx-1.18.0.tar.gz
+
+# Install lua-resty-core library
+RUN tar zxf lua-resty-core-0.1.19.tar.gz &&\
+    mv lua-resty-core-0.1.19/lib/* /usr/local/share/lua/5.1/
+
+# Install lua-resty-lrucache module
+RUN tar zxf lua-resty-lrucache-0.10.tar.gz &&\
+    mv lua-resty-lrucache-0.10/lib/resty/* /usr/local/share/lua/5.1/resty
+
+# Build nginx
+RUN export LUAJIT_LIB=/usr/local/lib/ &&\
+    export LUAJIT_INC=/usr/local/include/luajit-2.1/ &&\
+    cd nginx-1.18.0 &&\
+    ./configure \
+      --prefix=/opt/nginx \
+      --with-ld-opt="-Wl,-rpath,/usr/local/lib/" \
+      --with-http_ssl_module \
+      --add-module=/usr/src/ngx_devel_kit-0.3.1/ \
+      --add-module=/usr/src/lua-nginx-module-0.10.17 \
+      --without-http_gzip_module &&\
+    make -j2 &&\
+    make install
+
+# Install LuaRocks
+RUN cd /usr/src && \
+    wget https://luarocks.org/releases/luarocks-3.3.1.tar.gz && \
+    tar zxpf luarocks-3.3.1.tar.gz && \
+    cd luarocks-3.3.1 && \
+    ./configure --with-lua-include=/usr/local/include/luajit-2.1 && \
+    make . && \
+    make install
+
+# Set up Netacea module
+COPY ./lua_resty_netacea-0.0-2.rockspec ./
+COPY ./src ./src
+RUN luarocks make ./lua_resty_netacea-0.0-2.rockspec
+
+# Link CA certs so they match expected filename
+RUN ln -s /etc/ssl/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt
+
+# Start nginx and tail access.log
+CMD sh -c '/opt/nginx/sbin/nginx && tail -f /opt/nginx/logs/access.log'

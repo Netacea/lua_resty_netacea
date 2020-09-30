@@ -38,3 +38,20 @@ services:
     security_opt:
       - seccomp:unconfined
     command: sh -c 'cd /usr/src && luacheck --no-self -- /usr/src'
+
+  nginx_lua:
+    build:
+      dockerfile: Dockerfile.nginx_lua
+      context: .
+    ports:
+        - "80:80"
+    volumes:
+      - "./.luacheckrc:/usr/src/.luacheckrc"
+      - "./src:/usr/src/src"
+      - "./test:/usr/src/test"
+      - "./run_lua_tests.sh:/usr/src/run_lua_tests.sh"
+      - "./src/conf/:/opt/nginx/conf/"
+      - "./src/lua_resty_netacea.lua:/usr/local/share/lua/5.1/lua_resty_netacea.lua"
+    security_opt:
+      - seccomp:unconfined
+    command: sh -c '/opt/nginx/sbin/nginx && tail -f /opt/nginx/logs/access.log'
