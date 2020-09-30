@@ -405,28 +405,28 @@ requests_sema:post(1024); -- allow up to 1024 sending timer contexts
 -- start timers to execute requests tasks
 
 function _N:start_timers()
-  
+
   -- start requests executor
   local executor;
   executor = function( premature )
-    
+  
     if premature then return end
     local execution_thread = ngx.thread.spawn( function()
-      
+
       while true do
         while async_queue_low_priority:count() == 0 do
           if ngx.worker.exiting() == true then return end
-          
+
           queue_sema_low_priority:wait(0.3); -- sleeping for 300 milliseconds
         end
-        
+
         repeat
           if ngx.worker.exiting() == true then return end
-          
+
           -- to make sure that there are only up to 1024 executor's timers at any time
           local ok, _ = requests_sema:wait(0.1);
         until ok and ok == true;
-        
+
         local task = async_queue_low_priority:pop();
         if task then
           -- run tasks in separate timer contexts to avoid accumulating large numbers of dead corutines
@@ -435,19 +435,19 @@ function _N:start_timers()
             if not ok and err then
               ngx.log( ngx.ERR, "NETACEA API - sending task has failed with error: ", err );
             end
-            
+
             local cnt = 1;
-            
+
             while async_queue_low_priority:count() > 0 and cnt < 100 do
               if ngx.worker.exiting() == true then return end
-              
+
               local next_task = async_queue_low_priority:pop();
-              
+
               if not next_task then
                 queue_sema_low_priority:wait(0.3); -- sleeping for 300 milliseconds
                 next_task = async_queue_low_priority:pop();
               end
-              
+
               if next_task then
                 ok, err = pcall( next_task );
                 if not ok and err then
@@ -461,10 +461,10 @@ function _N:start_timers()
                 end
                 break;
               end
-              
+
               cnt = cnt + 1;
             end
-            
+
             requests_sema:post(1);
           end );
         else -- semaphore is out of sync with queue - need to drain it
@@ -473,20 +473,20 @@ function _N:start_timers()
           end
           requests_sema:post(1);
         end
-        
+
       end
     end );
-    
+
     local ok, err = ngx.thread.wait( execution_thread );
     if not ok and err then
       ngx.log( ngx.ERR, "NETACEA - executor thread has failed with error: ", err );
     end
-    
+
     ngx.timer.at( 0, executor );
   end
-  
+
   ngx.timer.at( 0, executor );
-  
+
 end
 -- end STASH code
 
@@ -522,9 +522,9 @@ function _N:ingest()
 
   local request_task = function()
     local hc = http:new();
-    
+
     local res, err = hc:request_uri( self.ingestEndpoint, request_params );
-    
+
     if not res and err then
       ngx.log( ngx.ERR, "Netacea ingest - failed API request - error: ", err );
       return;
