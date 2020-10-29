@@ -265,7 +265,6 @@ insulate("lua_resty_netacea.lua", function()
 
       local req_spy = spy.new(function(_, _url, _)
         if (url) then
-          -- assert(_url == 'http://' .. url) // TODO: figure this out?
           assert(_url == url)
         end
         return response, err
@@ -402,6 +401,8 @@ insulate("lua_resty_netacea.lua", function()
       assert.spy(req_spy).was.not_called()
       assert(ngx.status == ngx.HTTP_FORBIDDEN)
       assert.spy(ngx.print).was.called_with('403 Forbidden')
+
+      assert(ngx.header['Cache-Control'] == 'max-age=0, no-cache, no-store, must-revalidate')
       assert.spy(ngx.exit).was.called()
       assert.spy(logFunc).was.called()
     end)
@@ -444,6 +445,7 @@ insulate("lua_resty_netacea.lua", function()
       assert.spy(req_spy).was.called()
       assert(ngx.status == ngx.HTTP_FORBIDDEN)
       assert.spy(ngx.print).was.called_with(expected_captcha_body)
+      assert(ngx.header['Cache-Control'] == 'max-age=0, no-cache, no-store, must-revalidate')
       assert.spy(ngx.exit).was.called()
       assert.spy(logFunc).was.called()
     end)
