@@ -15,12 +15,14 @@ end
 local function serveCaptcha(captchaBody)
   ngx.status = ngx.HTTP_FORBIDDEN
   ngx.header["content-type"] = "text/html"
+  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
   ngx.print(captchaBody)
   return ngx.exit(ngx.HTTP_OK)
 end
 
 local function serveBlock()
   ngx.status = ngx.HTTP_FORBIDDEN;
+  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
   ngx.print("403 Forbidden");
   return ngx.exit(ngx.HTTP_FORBIDDEN);
 end
