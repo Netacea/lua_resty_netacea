@@ -104,7 +104,7 @@ function _N:validateCaptcha(onEventFunc)
   self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
 
   local res, err = hc:request_uri(
-    self.mitigationEndpoint[self.endpointIndex + 1] .. '/AtaVerifyCaptcha',
+    'http://' .. self.mitigationEndpoint[self.endpointIndex + 1] .. '/AtaVerifyCaptcha',
     {
       method = 'POST',
       headers = headers,
