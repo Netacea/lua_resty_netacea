@@ -2,7 +2,7 @@ package = "lua_resty_netacea"
 version = "0.0-2"
 source = {
   url = "git://github.com/Netacea/lua_resty_netacea",
-  branch = "master"
+  branch = "alipta"
 }
 description = {
   summary = "An Openresty module for easy integration of Netacea services",
