@@ -246,7 +246,7 @@ function _N:getMitigationResultFromService(onEventFunc)
   self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
 
   local res, err = hc:request_uri(
-   self.mitigationEndpoint[self.endpointIndex + 1],
+   'http://' .. self.mitigationEndpoint[self.endpointIndex + 1],
     {
       method = 'GET',
       headers = headers,
