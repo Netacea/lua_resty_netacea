@@ -2,7 +2,10 @@ local _N = {}
 local ngx = require 'ngx'
 local cjson = require 'cjson'
 local http = require 'resty.http'
+
 local COOKIE_DELIMITER = '_/@#/'
+local ONE_HOUR = 60 * 60
+local ONE_DAY = ONE_HOUR * 24
 
 local function buildResult(idType, mitigationType, captchaState)
   return {
@@ -27,6 +30,24 @@ local function serveBlock()
   return ngx.exit(ngx.HTTP_FORBIDDEN);
 end
 
+local function buildRandomString(length)
+  local chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  local randomString = ''
+
+  math.randomseed(os.time())
+
+  local charTable = {}
+  for c in chars:gmatch"." do
+      table.insert(charTable, c)
+  end
+
+  for i=1, length do -- luacheck: ignore i
+      randomString = randomString .. charTable[math.random(1, #charTable)]
+  end
+
+  return randomString
+end
+
 function _N:new(options)
   local n = {}
   setmetatable(n, self)
@@ -47,6 +68,11 @@ function _N:new(options)
     self.mitigationEndpoint = { self.mitigationEndpoint }
   end
   if not self.mitigationEndpoint[1] or self.mitigationEndpoint[1] == '' then
+    self.mitigationEnabled = false
+  end
+  -- mitigate:required:mitigationType
+  self.mitigationType = options.mitigationType or ''
+  if not self.mitigationType or (self.mitigationType ~= 'MITIGATE' and self.mitigationType ~= 'INJECT') then
     self.mitigationEnabled = false
   end
   -- mitigate:required:secretKey
@@ -170,7 +196,7 @@ function _N:bToHex(b)
   return hex
 end
 
-function _N:get_mitata_cookie()
+function _N:parseMitataCookie()
   local mitata_cookie = ngx.var.cookie__mitata or ''
   if (mitata_cookie == '') then return nil end
 
@@ -187,28 +213,97 @@ function _N:get_mitata_cookie()
     return nil
   end
 
-  if (ngx.time() > epoch) then
+  return {
+    mitata_cookie = mitata_cookie,
+    hash = hash,
+    epoch = epoch,
+    uid = uid,
+    mitigation_values = mitigation_values
+  }
+end
+
+function _N:buildMitataValToHash(hash, epoch, uid, mitigation_values)
+  local unhashed = self:buildNonHashedMitataVal(epoch, uid, mitigation_values)
+  return hash .. COOKIE_DELIMITER .. unhashed
+end
+
+function _N:buildNonHashedMitataVal(epoch, uid, mitigation_values)
+  return epoch .. COOKIE_DELIMITER .. uid .. COOKIE_DELIMITER .. mitigation_values
+end
+
+function _N:generateUid()
+  local randomString = buildRandomString(15)
+  return 'c' .. randomString
+end
+
+function _N:setIngestMitataCookie()
+  local mitata_values = self:parseMitataCookie()
+  local currentTime = ngx.time()
+  local epoch = currentTime + ONE_HOUR
+  local uid = self:generateUid()
+  local mitigation_values = _N.idTypes.NONE .. _N.mitigationTypes.NONE .. _N.captchaStates.NONE
+  local mitataExpiry = ONE_DAY
+
+  local new_hash = self:hashMitataCookie(epoch, uid, mitigation_values)
+  local mitataVal = self:buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
+
+  if (not mitata_values) then
+    self:addMitataCookie(mitataVal, mitataExpiry)
     return nil
   end
 
-  local hmac = require 'openssl.hmac'
-  local base64 = require('base64')
-  local to_hash = epoch .. COOKIE_DELIMITER .. uid .. COOKIE_DELIMITER .. mitigation_values
-  local our_hash = hmac.new(self.secretKey, 'sha256'):final(to_hash)
-  our_hash = self:bToHex(our_hash)
-  our_hash = base64.encode(our_hash)
+  local our_hash = self:hashMitataCookie(mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
 
-  if (our_hash ~= hash) then
+  if (our_hash ~= mitata_values.hash) then
+    self:addMitataCookie(mitataVal, mitataExpiry)
+    return nil
+  end
+
+  if (currentTime >= mitata_values.epoch) then
+    uid = mitata_values.uid
+    new_hash = self:hashMitataCookie(epoch, uid, mitigation_values)
+    mitataVal = self:buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
+    self:addMitataCookie(mitataVal, mitataExpiry)
+    return nil
+  end
+
+end
+
+function _N:get_mitata_cookie()
+  local mitata_values = self:parseMitataCookie()
+
+  if (not mitata_values) then
+    return nil
+  end
+
+  if (ngx.time() >= mitata_values.epoch) then
+    return nil
+  end
+
+  local our_hash = self:hashMitataCookie(mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
+
+  if (our_hash ~= mitata_values.hash) then
     return nil
   end
 
   return {
-    original = mitata_cookie,
-    hash = hash,
-    epoch = epoch,
-    uid = uid,
-    mitigation = mitigation_values
+    original = mitata_values.mitata_cookie,
+    hash = mitata_values.hash,
+    epoch = mitata_values.epoch,
+    uid = mitata_values.uid,
+    mitigation = mitata_values.mitigation_values
   }
+end
+
+function _N:hashMitataCookie(epoch, uid, mitigation_values)
+  local hmac = require 'openssl.hmac'
+  local base64 = require('base64')
+  local to_hash = self:buildNonHashedMitataVal(epoch, uid, mitigation_values)
+  local hashed = hmac.new(self.secretKey, 'sha256'):final(to_hash)
+  hashed = self:bToHex(hashed)
+  hashed = base64.encode(hashed)
+
+  return hashed
 end
 
 function _N:getMitigationResultFromService(onEventFunc)
@@ -304,6 +399,20 @@ function _N:inject(onEventFunc)
   ngx.req.set_header('x-netacea-mitigate', mitigationResult.mitigate)
   ngx.req.set_header('x-netacea-captcha',  mitigationResult.captcha)
   return nil
+end
+
+function _N:run(onEventFunc)
+  if self.ingestEnabled and not self.mitigationEnabled then
+    self:setIngestMitataCookie()
+  end
+
+  if self.mitigationEnabled then
+    if self.mitigationType == 'MITIGATE' then
+      self:mitigate(onEventFunc)
+    elseif self.mitigationType == 'INJECT' then
+      self:inject(onEventFunc)
+    end
+  end
 end
 
 function _N:getBestMitigation(mitigationType, captchaState, res)

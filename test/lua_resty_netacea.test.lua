@@ -16,7 +16,8 @@ local netacea_default_params = {
   secretKey          = 'secret-key',
   realIpHeader       = '',
   ingestEnabled      = true,
-  mitigationEnabled  = true
+  mitigationEnabled  = true,
+  mitigationType     = 'MITIGATE'
 }
 
 local function copy_table(orig, overrides)
@@ -96,6 +97,30 @@ insulate("lua_resty_netacea.lua", function()
       assert.is_false(netacea.mitigationEnabled)
     end)
 
+    it('sets mitigationEnabled to false if mitigationType is nil', function()
+      local params = copy_table(netacea_default_params)
+      params.mitigationType = {}
+      local netacea = (require 'lua_resty_netacea'):new(params)
+      assert.is_false(netacea.mitigationEnabled)
+    end)
+
+    it('sets mitigationEnabled to false if mitigationType is not MITIGATE or INJECT', function()
+      local paramsMitigate = copy_table(netacea_default_params)
+      paramsMitigate.mitigationType = 'MITIGATE'
+      local netaceaMitigate = (require 'lua_resty_netacea'):new(paramsMitigate)
+      assert.is_true(netaceaMitigate.mitigationEnabled)
+
+      local paramsInject = copy_table(netacea_default_params)
+      paramsInject.mitigationType = 'INJECT'
+      local netaceaInject = (require 'lua_resty_netacea'):new(paramsInject)
+      assert.is_true(netaceaInject.mitigationEnabled)
+
+      local paramsOther = copy_table(netacea_default_params)
+      paramsOther.mitigationType = 'wefwwg'
+      local netaceaOther = (require 'lua_resty_netacea'):new(paramsOther)
+      assert.is_false(netaceaOther.mitigationEnabled)
+    end)
+
     it('sets mitigationEndpoint if an array is provided', function()
       local endpointArray = { 'mitigation.endpoint', 'mitigation2.endpoint' }
       local netacea = (require 'lua_resty_netacea'):new(
@@ -128,7 +153,8 @@ insulate("lua_resty_netacea.lua", function()
       secretKey          = 'super_secret',
       realIpHeader       = '',
       ingestEnabled      = false,
-      mitigationEnabled  = true
+      mitigationEnabled  = true,
+      mitigationType     = 'MITIGATE'
     }
 
     it('returns nil if cookie is not present', function()
@@ -297,12 +323,13 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       netacea.get_mitata_cookie = spy.new(function () return nil end)
 
-      netacea:mitigate()
+      netacea:run()
 
       local _ = match._
 
@@ -330,7 +357,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local cookie = {
@@ -339,7 +367,7 @@ insulate("lua_resty_netacea.lua", function()
 
       netacea.get_mitata_cookie = spy.new(function () return cookie end)
 
-      netacea:mitigate()
+      netacea:run()
 
       assert.spy(req_spy).was.not_called()
     end)
@@ -359,7 +387,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
@@ -368,7 +397,7 @@ insulate("lua_resty_netacea.lua", function()
         assert.equal(netacea.captchaStates.NONE, res.captchaState)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(req_spy).was.not_called()
       assert.spy(logFunc).was.called()
@@ -384,7 +413,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local mit = netacea.idTypes.IP .. netacea.mitigationTypes.BLOCKED .. netacea.captchaStates.NONE
@@ -396,7 +426,7 @@ insulate("lua_resty_netacea.lua", function()
         assert(res.captchaState == netacea.captchaStates.NONE)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(req_spy).was.not_called()
       assert(ngx.status == ngx.HTTP_FORBIDDEN)
@@ -428,7 +458,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local mit = netacea.idTypes.IP .. netacea.mitigationTypes.BLOCKED .. netacea.captchaStates.SERVE
@@ -440,7 +471,7 @@ insulate("lua_resty_netacea.lua", function()
         assert(res.captchaState == netacea.captchaStates.SERVE)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(req_spy).was.called()
       assert(ngx.status == ngx.HTTP_FORBIDDEN)
@@ -473,7 +504,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
@@ -482,7 +514,7 @@ insulate("lua_resty_netacea.lua", function()
         assert(res.captchaState == netacea.captchaStates.SERVE)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert(ngx.status == ngx.HTTP_FORBIDDEN)
       assert.spy(req_spy).was.called()
@@ -514,14 +546,15 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
         assert(res.captchaState == netacea.captchaStates.PASS)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(logFunc).was.called()
     end)
@@ -549,14 +582,15 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
         assert(res.captchaState == netacea.captchaStates.FAIL)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(logFunc).was.called()
     end)
@@ -602,7 +636,8 @@ insulate("lua_resty_netacea.lua", function()
               secretKey          = mit_svc_secret,
               realIpHeader       = '',
               ingestEnabled      = false,
-              mitigationEnabled  = true
+              mitigationEnabled  = true,
+              mitigationType     = 'MITIGATE'
             })
 
 
@@ -612,7 +647,7 @@ insulate("lua_resty_netacea.lua", function()
               assert.are.equal(res.captchaState, captcha)
             end)
 
-            netacea:mitigate(logFunc)
+            netacea:run(logFunc)
 
             if not allowed then
               if ngx.status ~= ngx.HTTP_FORBIDDEN then
@@ -651,10 +686,11 @@ insulate("lua_resty_netacea.lua", function()
         apiKey             = mit_svc_api_key,
         secretKey          = mit_svc_secret,
         mitigationEnabled  = true,
-        userIdKey          = userIdKey
+        userIdKey          = userIdKey,
+        mitigationType     = 'MITIGATE'
       })
 
-      netacea:mitigate()
+      netacea:run()
 
       local _ = match._
       assert.spy(req_spy).was.called_with(_, mit_svc_url, {
@@ -681,10 +717,11 @@ insulate("lua_resty_netacea.lua", function()
         apiKey             = mit_svc_api_key,
         secretKey          = mit_svc_secret,
         mitigationEnabled  = true,
-        userIdKey          = userIdKey
+        userIdKey          = userIdKey,
+        mitigationType     = 'MITIGATE'
       })
 
-      netacea:mitigate()
+      netacea:run()
 
       local _ = match._
       assert.spy(req_spy).was.called_with(_, mit_svc_url, {
@@ -720,7 +757,8 @@ insulate("lua_resty_netacea.lua", function()
         mitigationEndpoint = mit_svc_url,
         apiKey             = mit_svc_api_key,
         secretKey          = mit_svc_secret,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
@@ -729,7 +767,7 @@ insulate("lua_resty_netacea.lua", function()
         assert.are.equal(res.captchaState, netacea.captchaStates.COOKIEPASS)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(logFunc).was.called()
     end)
@@ -754,7 +792,8 @@ insulate("lua_resty_netacea.lua", function()
         mitigationEndpoint = mit_svc_url,
         apiKey             = mit_svc_api_key,
         secretKey          = mit_svc_secret,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
@@ -763,7 +802,7 @@ insulate("lua_resty_netacea.lua", function()
         assert.are.equal(res.captchaState, netacea.captchaStates.COOKIEFAIL)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(logFunc).was.called()
 
@@ -781,10 +820,11 @@ insulate("lua_resty_netacea.lua", function()
         apiKey             = mit_svc_api_key,
         secretKey          = mit_svc_secret,
         mitigationEnabled  = true,
-        userIdKey          = userIdKey
+        userIdKey          = userIdKey,
+        mitigationType     = 'MITIGATE'
       })
 
-      netacea:mitigate()
+      netacea:run()
 
       local _ = match._
       assert.spy(req_spy).was.called_with(_, mit_svc_url_captcha, {
@@ -805,7 +845,7 @@ insulate("lua_resty_netacea.lua", function()
       local req_spy = setHttpResponse('mitigation.endpoint', nil, 'error')
       local netacea = (require 'lua_resty_netacea'):new(netacea_default_params)
 
-      netacea:mitigate()
+      netacea:run()
 
       assert.spy(req_spy).was.called(1)
       assert.spy(req_spy).was.called_with(match._, 'mitigation.endpoint', match.is_table())
@@ -821,29 +861,29 @@ insulate("lua_resty_netacea.lua", function()
       )
 
       local req_spy = setHttpResponse(nil, nil, 'error')
-      netacea:mitigate() -- request 1 - endpoint 2
+      netacea:run() -- request 1 - endpoint 2
       assert.spy(req_spy).was.called(1)
       assert.spy(req_spy).was.called_with(match._, endpointArray[2], match.is_table())
       assert.spy(req_spy).was_not.called_with(match._, endpointArray[3], match.is_table())
       assert.spy(req_spy).was_not.called_with(match._, endpointArray[1], match.is_table())
-      netacea:mitigate() -- request 2 - endpoint 3
+      netacea:run() -- request 2 - endpoint 3
       assert.spy(req_spy).was.called(2)
       assert.spy(req_spy).was.called_with(match._, endpointArray[3], match.is_table())
       assert.spy(req_spy).was_not.called_with(match._, endpointArray[1], match.is_table())
-      netacea:mitigate() -- request 3 - endpoint 1
+      netacea:run() -- request 3 - endpoint 1
       assert.spy(req_spy).was.called(3)
       assert.spy(req_spy).was.called_with(match._, endpointArray[1], match.is_table())
       req_spy = setHttpResponse(nil, nil, 'error') -- reset call history for spy
-      netacea:mitigate() -- request 4 - endpoint 2
+      netacea:run() -- request 4 - endpoint 2
       assert.spy(req_spy).was.called(1)
       assert.spy(req_spy).was.called_with(match._, endpointArray[2], match.is_table())
       assert.spy(req_spy).was_not.called_with(match._, endpointArray[3], match.is_table())
       assert.spy(req_spy).was_not.called_with(match._, endpointArray[1], match.is_table())
-      netacea:mitigate() -- request 5 - endpoint 3
+      netacea:run() -- request 5 - endpoint 3
       assert.spy(req_spy).was.called(2)
       assert.spy(req_spy).was.called_with(match._, endpointArray[3], match.is_table())
       assert.spy(req_spy).was_not.called_with(match._, endpointArray[1], match.is_table())
-      netacea:mitigate() -- request 6 - endpoint 1
+      netacea:run() -- request 6 - endpoint 1
       assert.spy(req_spy).was.called(3)
       assert.spy(req_spy).was.called_with(match._, endpointArray[1], match.is_table())
     end)
@@ -865,7 +905,8 @@ insulate("lua_resty_netacea.lua", function()
         mitigationEndpoint = mit_svc_url,
         apiKey             = mit_svc_api_key,
         secretKey          = mit_svc_secret,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
@@ -874,7 +915,7 @@ insulate("lua_resty_netacea.lua", function()
         assert.are.equal(res.captchaState, netacea.captchaStates.NONE)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(logFunc).was.called()
     end)
@@ -896,7 +937,8 @@ insulate("lua_resty_netacea.lua", function()
         mitigationEndpoint = mit_svc_url,
         apiKey             = mit_svc_api_key,
         secretKey          = mit_svc_secret,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
@@ -905,7 +947,7 @@ insulate("lua_resty_netacea.lua", function()
         assert.are.equal(res.captchaState, netacea.captchaStates.NONE)
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(logFunc).was.called()
     end)
@@ -927,7 +969,8 @@ insulate("lua_resty_netacea.lua", function()
         mitigationEndpoint = mit_svc_url,
         apiKey             = mit_svc_api_key,
         secretKey          = mit_svc_secret,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE'
       })
 
       local logFunc = spy.new(function(res)
@@ -936,7 +979,7 @@ insulate("lua_resty_netacea.lua", function()
         assert.are.equal(res.captchaState, 'q')
       end)
 
-      netacea:mitigate(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(logFunc).was.called()
     end)
@@ -1017,12 +1060,13 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'INJECT'
       })
 
       netacea.get_mitata_cookie = spy.new(function () return nil end)
 
-      netacea:inject()
+      netacea:run()
 
       local _ = luaMatch._
 
@@ -1050,7 +1094,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'INJECT'
       })
 
       local cookie = {
@@ -1059,7 +1104,7 @@ insulate("lua_resty_netacea.lua", function()
 
       netacea.get_mitata_cookie = spy.new(function () return cookie end)
 
-      netacea:inject()
+      netacea:run()
 
       assert.spy(req_spy).was.not_called()
     end)
@@ -1082,7 +1127,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'INJECT'
       })
 
       local logFunc = spy.new(function(res)
@@ -1091,7 +1137,7 @@ insulate("lua_resty_netacea.lua", function()
         assert.equal(netacea.captchaStates.NONE, res.captchaState)
       end)
 
-      netacea:inject(logFunc)
+      netacea:run(logFunc)
       assert(ngx.status == ngx.OK)
       assert.spy(ngx.req.set_header).was.called_with('x-netacea-match', match)
       assert.spy(ngx.req.set_header).was.called_with('x-netacea-mitigate', mitigate)
@@ -1110,7 +1156,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'INJECT'
       })
       local match = netacea.idTypes.IP
       local mitigate = netacea.mitigationTypes.BLOCKED
@@ -1124,7 +1171,7 @@ insulate("lua_resty_netacea.lua", function()
         assert(res.captchaState == captcha)
       end)
 
-      netacea:inject(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(req_spy).was.not_called()
       assert(ngx.status == ngx.OK)
@@ -1155,7 +1202,8 @@ insulate("lua_resty_netacea.lua", function()
         secretKey          = mit_svc_secret,
         realIpHeader       = '',
         ingestEnabled      = false,
-        mitigationEnabled  = true
+        mitigationEnabled  = true,
+        mitigationType     = 'INJECT'
       })
 
       local mit = netacea.idTypes.IP .. netacea.mitigationTypes.BLOCKED .. netacea.captchaStates.SERVE
@@ -1167,7 +1215,7 @@ insulate("lua_resty_netacea.lua", function()
         assert(res.captchaState == netacea.captchaStates.SERVE)
       end)
 
-      netacea:inject(logFunc)
+      netacea:run(logFunc)
 
       assert.spy(req_spy).was.called()
       assert(ngx.status == ngx.OK)

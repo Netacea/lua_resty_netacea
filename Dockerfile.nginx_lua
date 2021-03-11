@@ -8,7 +8,7 @@ USER root
 WORKDIR /usr/src
 
 ## Install required packages
-RUN yum update && yum install -y \
+RUN yum -y update && yum -y install \
     wget \
     gcc \
     gcc-c++ \
@@ -69,9 +69,9 @@ RUN cd /usr/src && \
     make install
 
 # Set up Netacea module
-COPY ./lua_resty_netacea-0.0-4.rockspec ./
+COPY ./lua_resty_netacea-0.1-0.rockspec ./
 COPY ./src ./src
-RUN luarocks make ./lua_resty_netacea-0.0-4.rockspec
+RUN luarocks make ./lua_resty_netacea-0.1-0.rockspec
 
 # Link CA certs so they match expected filename
 RUN ln -s /etc/ssl/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt
