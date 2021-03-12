@@ -1,6 +1,12 @@
 # lua_resty_netacea
 An Openresty module for easy integration of Netacea services
 
+# Building the base image
+All the images used by docker rely on a specific base image being available on your local docker registry. You can ensure you have this by running the following command
+```sh
+docker build -t lua_resty_netacea:latest .
+```
+
 # Running Tests
 `docker-compose build` then `docker-compose run test`
 
@@ -29,14 +35,15 @@ http {
       secretKey          = 'your-secret-key',
       realIpHeader       = 'realip-header',
       ingestEnabled      = true,
-      mitigationEnabled  = true
+      mitigationEnabled  = true,
+      mitigationType     = 'MITIGATE'
     })
   }
   log_by_lua_block {
     netacea:ingest()
   }
   access_by_lua_block {
-    netacea:mitigate()
+    netacea:run()
   }
 
   server {
@@ -75,14 +82,15 @@ http {
       secretKey          = 'your-secret-key',
       realIpHeader       = 'realip-header',
       ingestEnabled      = true,
-      mitigationEnabled  = true
+      mitigationEnabled  = true,
+      mitigationType     = 'INJECT'
     })
   }
   log_by_lua_block {
     netacea:ingest()
   }
   access_by_lua_block {
-    netacea:inject()
+    netacea:run()
   }
 
   server {
