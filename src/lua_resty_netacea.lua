@@ -1,4 +1,7 @@
 local _N = {}
+_N._VERSION = '0.2.0'
+_N._TYPE = 'nginx'
+
 local ngx = require 'ngx'
 local cjson = require 'cjson'
 local http = require 'resty.http'
@@ -92,6 +95,8 @@ function _N:new(options)
   end
 
   self.endpointIndex = 0
+  self._MODULE_TYPE = _N._TYPE
+  self._MODULE_VERSION = _N._VERSION
 
   _N:start_timers();
 
@@ -616,7 +621,9 @@ function _N:ingest()
     BytesSent = vars.bytes_sent,
     Referer = vars.http_referer or "-",
     NetaceaUserIdCookie = mitata,
-    NetaceaMitigationApplied = ngx.ctx.bc_type
+    NetaceaMitigationApplied = ngx.ctx.bc_type,
+    IntegrationType = self._MODULE_TYPE,
+    IntegrationVersion = self._MODULE_VERSION
   }
 
   -- start STASH code
