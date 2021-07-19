@@ -555,7 +555,6 @@ function _N:start_timers()
             local cnt = 1;
 
             while async_queue_low_priority:count() > 0 and cnt < 100 do
-              if ngx.worker.exiting() == true then return end
 
               local next_task = async_queue_low_priority:pop();
 
@@ -596,6 +595,11 @@ function _N:start_timers()
     local ok, err = ngx.thread.wait( execution_thread );
     if not ok and err then
       ngx.log( ngx.ERR, "NETACEA - executor thread has failed with error: ", err );
+    end
+
+    -- If the worker is exiting, don't queue another executor
+    if ngx.worker.exiting() then
+      return
     end
 
     ngx.timer.at( 0, executor );

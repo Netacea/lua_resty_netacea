@@ -69,9 +69,9 @@ RUN cd /usr/src && \
     make install
 
 # Set up Netacea module
-COPY ./lua_resty_netacea-0.2-0.rockspec ./
+COPY ./lua_resty_netacea-0.2-1.rockspec ./
 COPY ./src ./src
-RUN luarocks make ./lua_resty_netacea-0.2-0.rockspec
+RUN luarocks make ./lua_resty_netacea-0.2-1.rockspec
 
 # Link CA certs so they match expected filename
 RUN ln -s /etc/ssl/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt
