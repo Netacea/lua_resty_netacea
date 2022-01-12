@@ -18,19 +18,19 @@ local function buildResult(idType, mitigationType, captchaState)
   }
 end
 
-local function serveCaptcha(captchaBody)
-  ngx.status = ngx.HTTP_FORBIDDEN
+local function serveCaptcha(statusCode, captchaBody)
+  ngx.status = statusCode
   ngx.header["content-type"] = "text/html"
   ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
   ngx.print(captchaBody)
   return ngx.exit(ngx.HTTP_OK)
 end
 
-local function serveBlock()
-  ngx.status = ngx.HTTP_FORBIDDEN;
+local function serveBlock(statusCode, blockBody)
+  ngx.status = statusCode;
   ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
-  ngx.print("403 Forbidden");
-  return ngx.exit(ngx.HTTP_FORBIDDEN);
+  ngx.print(blockBody);
+  return ngx.exit(statusCode);
 end
 
 local function buildRandomString(length)
@@ -83,6 +83,12 @@ function _N:new(options)
   if not self.secretKey or self.secretKey == '' then
     self.mitigationEnabled = false
   end
+  -- mitigate:optional:captchaStatusCode
+  self.captchaStatusCode = options.captchaStatusCode or ngx.HTTP_FORBIDDEN
+  -- mitigate:optional:blockStatusCode
+  self.blockStatusCode = options.blockStatusCode or ngx.HTTP_FORBIDDEN
+  -- mitigate:optional:blockBody
+  self.blockBody = options.blockBody or '403 Forbidden'
   -- global:optional:realIpHeader
   self.realIpHeader = options.realIpHeader or ''
   -- global:optional:userIdKey
@@ -429,10 +435,10 @@ function _N:getBestMitigation(mitigationType, captchaState, res)
   if (captchaState == _N.captchaStates.COOKIEPASS) then return nil end
 
   if (mitigationType == _N.mitigationTypes.BLOCKED and captchaState == _N.captchaStates.SERVE and res ~= nil) then
-    return serveCaptcha(res.body)
+    return serveCaptcha(self.captchaStatusCode, res.body)
   end
 
-  return serveBlock()
+  return serveBlock(self.blockStatusCode, self.blockBody)
 end
 
 function _N:setBcType(match, mitigate, captcha)

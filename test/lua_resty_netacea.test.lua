@@ -443,6 +443,45 @@ insulate("lua_resty_netacea.lua", function()
       assert.spy(logFunc).was.called()
     end)
 
+    it('allows customisation of response if mitata cookie is BLOCK', function()
+      local expected_block_status_code = 499
+      local expected_block_body = 'Blocked'
+
+      local req_spy = setHttpResponse('-', nil, 'error')
+
+      local netacea = (require 'lua_resty_netacea'):new({
+        ingestEndpoint     = '',
+        mitigationEndpoint = mit_svc_url,
+        apiKey             = mit_svc_api_key,
+        secretKey          = mit_svc_secret,
+        realIpHeader       = '',
+        ingestEnabled      = false,
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE',
+        blockStatusCode    = expected_block_status_code,
+        blockBody          = expected_block_body
+      })
+
+      local mit = netacea.idTypes.IP .. netacea.mitigationTypes.BLOCKED .. netacea.captchaStates.NONE
+      ngx.var.cookie__mitata = build_mitata_cookie(ngx.time() + 20, generate_uid(), mit, mit_svc_secret)
+
+      local logFunc = spy.new(function(res)
+        assert(res.idType == netacea.idTypes.IP)
+        assert(res.mitigationType == netacea.mitigationTypes.BLOCKED)
+        assert(res.captchaState == netacea.captchaStates.NONE)
+      end)
+
+      netacea:run(logFunc)
+
+      assert.spy(req_spy).was.not_called()
+      assert(ngx.status == expected_block_status_code)
+      assert.spy(ngx.print).was.called_with(expected_block_body)
+
+      assert(ngx.header['Cache-Control'] == 'max-age=0, no-cache, no-store, must-revalidate')
+      assert.spy(ngx.exit).was.called()
+      assert.spy(logFunc).was.called()
+    end)
+
     it('forwards to mit service if mitata cookie is CAPTCHA SERVE', function()
       local expected_captcha_body = 'some captcha body'
       local netacea = require 'lua_resty_netacea'
@@ -481,6 +520,52 @@ insulate("lua_resty_netacea.lua", function()
 
       assert.spy(req_spy).was.called()
       assert(ngx.status == ngx.HTTP_FORBIDDEN)
+      assert.spy(ngx.print).was.called_with(expected_captcha_body)
+      assert(ngx.header['Cache-Control'] == 'max-age=0, no-cache, no-store, must-revalidate')
+      assert.spy(ngx.exit).was.called()
+      assert.spy(logFunc).was.called()
+    end)
+
+    it('it allows custom HTTP status code if mitata cookie is CAPTCHA SERVE', function()
+      local expected_captcha_status_code = 498
+      local expected_captcha_body = 'some captcha body'
+      local netacea = require 'lua_resty_netacea'
+      local req_spy = setHttpResponse(mit_svc_url, {
+        headers = {
+          ['x-netacea-match'] = netacea.idTypes.IP,
+          ['x-netacea-mitigate'] = netacea.mitigationTypes.BLOCKED,
+          ['x-netacea-captcha'] = netacea.captchaStates.SERVE
+        },
+        status = 200,
+        body = expected_captcha_body
+      }, nil)
+
+      package.loaded['lua_resty_netacea'] = nil
+      netacea = (require 'lua_resty_netacea'):new({
+        ingestEndpoint     = '',
+        mitigationEndpoint = mit_svc_url,
+        apiKey             = mit_svc_api_key,
+        secretKey          = mit_svc_secret,
+        realIpHeader       = '',
+        ingestEnabled      = false,
+        mitigationEnabled  = true,
+        mitigationType     = 'MITIGATE',
+        captchaStatusCode  = expected_captcha_status_code
+      })
+
+      local mit = netacea.idTypes.IP .. netacea.mitigationTypes.BLOCKED .. netacea.captchaStates.SERVE
+      ngx.var.cookie__mitata = build_mitata_cookie(ngx.time() + 20, generate_uid(), mit, mit_svc_secret)
+
+      local logFunc = spy.new(function(res)
+        assert(res.idType == netacea.idTypes.IP)
+        assert(res.mitigationType == netacea.mitigationTypes.BLOCKED)
+        assert(res.captchaState == netacea.captchaStates.SERVE)
+      end)
+
+      netacea:run(logFunc)
+
+      assert.spy(req_spy).was.called()
+      assert(ngx.status == expected_captcha_status_code)
       assert.spy(ngx.print).was.called_with(expected_captcha_body)
       assert(ngx.header['Cache-Control'] == 'max-age=0, no-cache, no-store, must-revalidate')
       assert.spy(ngx.exit).was.called()
