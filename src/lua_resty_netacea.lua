@@ -524,7 +524,7 @@ local timers_running = false;
 function _N:start_timers()
 
   if timers_running == true then return end
-  
+
   -- start requests executor
   local executor;
   executor = function( premature )
