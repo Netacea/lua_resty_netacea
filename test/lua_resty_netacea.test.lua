@@ -295,9 +295,9 @@ insulate("lua_resty_netacea.lua", function()
       package.loaded['http'] = nil
       local http_mock = require('resty.http')
 
-      local req_spy = spy.new(function(_, _url, _)
+      local req_spy = spy.new(function(_, test_url, _)
         if (url) then
-          assert(_url == url)
+          assert(test_url == url)
         end
         return response, err
       end)
@@ -1032,9 +1032,9 @@ insulate("lua_resty_netacea.lua", function()
       package.loaded['http'] = nil
       local http_mock = require('resty.http')
 
-      local req_spy = spy.new(function(_, _url, _)
+      local req_spy = spy.new(function(_, test_url, _)
         if (url) then
-          assert(_url == url)
+          assert(test_url == url)
         end
         return response, err
       end)
