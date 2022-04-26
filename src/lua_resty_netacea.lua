@@ -57,46 +57,46 @@ function _N:new(options)
   self.__index = self
 
   -- ingest:optional:ingestEnabled
-  self.ingestEnabled = options.ingestEnabled or false
+  n.ingestEnabled = options.ingestEnabled or false
   -- ingest:required:ingestEndpoint
-  self.ingestEndpoint = options.ingestEndpoint
-  if not self.ingestEndpoint or self.ingestEndpoint == '' then
-    self.ingestEnabled = false
+  n.ingestEndpoint = options.ingestEndpoint
+  if not n.ingestEndpoint or n.ingestEndpoint == '' then
+    n.ingestEnabled = false
   end
   -- mitigate:optional:mitigationEnabled
-  self.mitigationEnabled = options.mitigationEnabled or false
+  n.mitigationEnabled = options.mitigationEnabled or false
   -- mitigate:required:mitigationEndpoint
-  self.mitigationEndpoint = options.mitigationEndpoint
-  if type(self.mitigationEndpoint) ~= 'table' then
-    self.mitigationEndpoint = { self.mitigationEndpoint }
+  n.mitigationEndpoint = options.mitigationEndpoint
+  if type(n.mitigationEndpoint) ~= 'table' then
+    n.mitigationEndpoint = { n.mitigationEndpoint }
   end
-  if not self.mitigationEndpoint[1] or self.mitigationEndpoint[1] == '' then
-    self.mitigationEnabled = false
+  if not n.mitigationEndpoint[1] or n.mitigationEndpoint[1] == '' then
+    n.mitigationEnabled = false
   end
   -- mitigate:required:mitigationType
-  self.mitigationType = options.mitigationType or ''
-  if not self.mitigationType or (self.mitigationType ~= 'MITIGATE' and self.mitigationType ~= 'INJECT') then
-    self.mitigationEnabled = false
+  n.mitigationType = options.mitigationType or ''
+  if not n.mitigationType or (n.mitigationType ~= 'MITIGATE' and n.mitigationType ~= 'INJECT') then
+    n.mitigationEnabled = false
   end
   -- mitigate:required:secretKey
-  self.secretKey = options.secretKey
-  if not self.secretKey or self.secretKey == '' then
-    self.mitigationEnabled = false
+  n.secretKey = options.secretKey
+  if not n.secretKey or n.secretKey == '' then
+    n.mitigationEnabled = false
   end
   -- global:optional:realIpHeader
-  self.realIpHeader = options.realIpHeader or ''
+  n.realIpHeader = options.realIpHeader or ''
   -- global:optional:userIdKey
-  self.userIdKey = options.userIdKey or ''
+  n.userIdKey = options.userIdKey or ''
   -- global:required:apiKey
-  self.apiKey = options.apiKey
-  if not self.apiKey then
-    self.ingestEnabled = false
-    self.mitigationEnabled = false
+  n.apiKey = options.apiKey
+  if not n.apiKey then
+    n.ingestEnabled = false
+    n.mitigationEnabled = false
   end
 
-  self.endpointIndex = 0
-  self._MODULE_TYPE = _N._TYPE
-  self._MODULE_VERSION = _N._VERSION
+  n.endpointIndex = 0
+  n._MODULE_TYPE = _N._TYPE
+  n._MODULE_VERSION = _N._VERSION
 
   _N:start_timers();
 
@@ -519,8 +519,11 @@ requests_sema:post(1024); -- allow up to 1024 sending timer contexts
 
 --------------------------------------------------------
 -- start timers to execute requests tasks
+local timers_running = false;
 
 function _N:start_timers()
+
+  if timers_running == true then return end
 
   -- start requests executor
   local executor;
@@ -607,6 +610,7 @@ function _N:start_timers()
 
   ngx.timer.at( 0, executor );
 
+  timers_running = true;
 end
 -- end STASH code
 
