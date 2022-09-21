@@ -295,22 +295,29 @@ insulate("lua_resty_netacea.lua", function()
       package.loaded['http'] = nil
       local http_mock = require('resty.http')
 
-      local req_spy = spy.new(function(_, _url, _)
+      local request_uri_spy = spy.new(function(_, _url, _)
         if (url) then
           assert(_url == url)
         end
         return response, err
       end)
 
+      local set_timeouts_spy = spy.new(function(_self, connect_timeout, send_timeout, read_timeout)
+        assert.is.equal(connect_timeout, 500, 'connect_timeout is set')
+        assert.is.equal(send_timeout, 750, 'send_timeout is set')
+        assert.is.equal(read_timeout, 750, 'read_timeout is set')
+      end)
+
       http_mock.new = function()
         return {
-          request_uri = req_spy
+          request_uri = request_uri_spy,
+          set_timeouts = set_timeouts_spy
         }
       end
 
       package.loaded['http'] = http_mock
 
-      return req_spy
+      return request_uri_spy
     end
 
     before_each(function()
@@ -348,8 +355,7 @@ insulate("lua_resty_netacea.lua", function()
           ['user-agent'] = ngx.var.http_user_agent,
           ['x-netacea-client-ip'] = ngx.var.remote_addr,
           ["cookie"] = "_mitata=" .. ngx.var.cookie__mitata .. ';_mitatacaptcha='
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
@@ -708,8 +714,7 @@ insulate("lua_resty_netacea.lua", function()
           ['x-netacea-client-ip'] = ngx.var.remote_addr,
           ["cookie"] = "_mitata=" .. ngx.var.cookie__mitata .. ';_mitatacaptcha=',
           ["x-netacea-userid"] = userIdVal
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
@@ -738,8 +743,7 @@ insulate("lua_resty_netacea.lua", function()
           ['user-agent'] = ngx.var.http_user_agent,
           ['x-netacea-client-ip'] = ngx.var.remote_addr,
           ["cookie"] = "_mitata=" .. ngx.var.cookie__mitata .. ';_mitatacaptcha='
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
@@ -842,8 +846,7 @@ insulate("lua_resty_netacea.lua", function()
           ["x-netacea-userid"] = userIdVal,
           ['user-agent'] = ngx.var.http_user_agent,
           ['x-netacea-client-ip'] = ngx.var.remote_addr
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
@@ -1085,8 +1088,7 @@ insulate("lua_resty_netacea.lua", function()
           ['user-agent'] = ngx.var.http_user_agent,
           ['x-netacea-client-ip'] = ngx.var.remote_addr,
           ["cookie"] = "_mitata=" .. ngx.var.cookie__mitata .. ';_mitatacaptcha='
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
