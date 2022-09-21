@@ -62,6 +62,35 @@ local function generate_uid()
   return '0000000012345678'
 end
 
+local function setHttpResponse(expectedUrl, response, err)
+  package.loaded['http'] = nil
+  local http_mock = require('resty.http')
+
+  local request_uri_spy = spy.new(function(_, url, _)
+    if (expectedUrl) then
+      assert(url == expectedUrl)
+    end
+    return response, err
+  end)
+
+  local set_timeouts_spy = spy.new(function(_self, connect_timeout, send_timeout, read_timeout)
+    assert.is.equal(connect_timeout, 500, 'connect_timeout is set')
+    assert.is.equal(send_timeout, 750, 'send_timeout is set')
+    assert.is.equal(read_timeout, 750, 'read_timeout is set')
+  end)
+
+  http_mock.new = function()
+    return {
+      request_uri = request_uri_spy,
+      set_timeouts = set_timeouts_spy
+    }
+  end
+
+  package.loaded['http'] = http_mock
+
+  return request_uri_spy
+end
+
 insulate("lua_resty_netacea.lua", function()
   describe('new', function()
 
@@ -289,35 +318,6 @@ insulate("lua_resty_netacea.lua", function()
 
       ngx = wrap_table(require 'ngx', ngx_stub)
       package.loaded['ngx'] = ngx
-    end
-
-    local function setHttpResponse(url, response, err)
-      package.loaded['http'] = nil
-      local http_mock = require('resty.http')
-
-      local request_uri_spy = spy.new(function(_, _url, _)
-        if (url) then
-          assert(_url == url)
-        end
-        return response, err
-      end)
-
-      local set_timeouts_spy = spy.new(function(_self, connect_timeout, send_timeout, read_timeout)
-        assert.is.equal(connect_timeout, 500, 'connect_timeout is set')
-        assert.is.equal(send_timeout, 750, 'send_timeout is set')
-        assert.is.equal(read_timeout, 750, 'read_timeout is set')
-      end)
-
-      http_mock.new = function()
-        return {
-          request_uri = request_uri_spy,
-          set_timeouts = set_timeouts_spy
-        }
-      end
-
-      package.loaded['http'] = http_mock
-
-      return request_uri_spy
     end
 
     before_each(function()
@@ -1029,28 +1029,6 @@ insulate("lua_resty_netacea.lua", function()
       }
       ngx = wrap_table(require 'ngx', ngx_stub)
       package.loaded['ngx'] = ngx
-    end
-
-    local function setHttpResponse(url, response, err)
-      package.loaded['http'] = nil
-      local http_mock = require('resty.http')
-
-      local req_spy = spy.new(function(_, _url, _)
-        if (url) then
-          assert(_url == url)
-        end
-        return response, err
-      end)
-
-      http_mock.new = function()
-        return {
-          request_uri = req_spy
-        }
-      end
-
-      package.loaded['http'] = http_mock
-
-      return req_spy
     end
 
     before_each(function()
