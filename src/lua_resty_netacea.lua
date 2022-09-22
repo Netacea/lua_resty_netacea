@@ -1,5 +1,5 @@
 local _N = {}
-_N._VERSION = '0.2.0'
+_N._VERSION = '0.2-2'
 _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'
