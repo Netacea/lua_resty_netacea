@@ -174,7 +174,7 @@ insulate("lua_resty_netacea.lua", function()
 
     it('sets the module version and type', function()
       local netacea = (require 'lua_resty_netacea'):new(netacea_default_params)
-      assert.is.equal(netacea._MODULE_VERSION, '0.2.0')
+      assert.is.equal(netacea._MODULE_VERSION, '0.2-2')
       assert.is.equal(netacea._MODULE_TYPE, 'nginx')
     end)
   end)
