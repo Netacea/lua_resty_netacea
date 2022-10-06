@@ -653,7 +653,7 @@ function _N:ingest()
   };
 
   local request_task = function()
-    local hc = createHttpConnection()
+    local hc = http:new();
 
     local res, err = hc:request_uri( self.ingestEndpoint, request_params );
 
