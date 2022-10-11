@@ -62,6 +62,35 @@ local function generate_uid()
   return '0000000012345678'
 end
 
+local function setHttpResponse(expectedUrl, response, err)
+  package.loaded['http'] = nil
+  local http_mock = require('resty.http')
+
+  local request_uri_spy = spy.new(function(_, url, _)
+    if (expectedUrl) then
+      assert(url == expectedUrl)
+    end
+    return response, err
+  end)
+
+  local set_timeouts_spy = spy.new(function(_self, connect_timeout, send_timeout, read_timeout)
+    assert.is.equal(connect_timeout, 500, 'connect_timeout is set')
+    assert.is.equal(send_timeout, 750, 'send_timeout is set')
+    assert.is.equal(read_timeout, 750, 'read_timeout is set')
+  end)
+
+  http_mock.new = function()
+    return {
+      request_uri = request_uri_spy,
+      set_timeouts = set_timeouts_spy
+    }
+  end
+
+  package.loaded['http'] = http_mock
+
+  return request_uri_spy
+end
+
 insulate("lua_resty_netacea.lua", function()
   describe('new', function()
 
@@ -145,7 +174,7 @@ insulate("lua_resty_netacea.lua", function()
 
     it('sets the module version and type', function()
       local netacea = (require 'lua_resty_netacea'):new(netacea_default_params)
-      assert.is.equal(netacea._MODULE_VERSION, '0.2.0')
+      assert.is.equal(netacea._MODULE_VERSION, '0.2.2')
       assert.is.equal(netacea._MODULE_TYPE, 'nginx')
     end)
   end)
@@ -291,28 +320,6 @@ insulate("lua_resty_netacea.lua", function()
       package.loaded['ngx'] = ngx
     end
 
-    local function setHttpResponse(url, response, err)
-      package.loaded['http'] = nil
-      local http_mock = require('resty.http')
-
-      local req_spy = spy.new(function(_, _url, _)
-        if (url) then
-          assert(_url == url)
-        end
-        return response, err
-      end)
-
-      http_mock.new = function()
-        return {
-          request_uri = req_spy
-        }
-      end
-
-      package.loaded['http'] = http_mock
-
-      return req_spy
-    end
-
     before_each(function()
       package.loaded['lua_resty_netacea'] = nil
 
@@ -348,8 +355,7 @@ insulate("lua_resty_netacea.lua", function()
           ['user-agent'] = ngx.var.http_user_agent,
           ['x-netacea-client-ip'] = ngx.var.remote_addr,
           ["cookie"] = "_mitata=" .. ngx.var.cookie__mitata .. ';_mitatacaptcha='
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
@@ -708,8 +714,7 @@ insulate("lua_resty_netacea.lua", function()
           ['x-netacea-client-ip'] = ngx.var.remote_addr,
           ["cookie"] = "_mitata=" .. ngx.var.cookie__mitata .. ';_mitatacaptcha=',
           ["x-netacea-userid"] = userIdVal
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
@@ -738,8 +743,7 @@ insulate("lua_resty_netacea.lua", function()
           ['user-agent'] = ngx.var.http_user_agent,
           ['x-netacea-client-ip'] = ngx.var.remote_addr,
           ["cookie"] = "_mitata=" .. ngx.var.cookie__mitata .. ';_mitatacaptcha='
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
@@ -842,8 +846,7 @@ insulate("lua_resty_netacea.lua", function()
           ["x-netacea-userid"] = userIdVal,
           ['user-agent'] = ngx.var.http_user_agent,
           ['x-netacea-client-ip'] = ngx.var.remote_addr
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 
@@ -1028,28 +1031,6 @@ insulate("lua_resty_netacea.lua", function()
       package.loaded['ngx'] = ngx
     end
 
-    local function setHttpResponse(url, response, err)
-      package.loaded['http'] = nil
-      local http_mock = require('resty.http')
-
-      local req_spy = spy.new(function(_, _url, _)
-        if (url) then
-          assert(_url == url)
-        end
-        return response, err
-      end)
-
-      http_mock.new = function()
-        return {
-          request_uri = req_spy
-        }
-      end
-
-      package.loaded['http'] = http_mock
-
-      return req_spy
-    end
-
     before_each(function()
       package.loaded['lua_resty_netacea'] = nil
 
@@ -1085,8 +1066,7 @@ insulate("lua_resty_netacea.lua", function()
           ['user-agent'] = ngx.var.http_user_agent,
           ['x-netacea-client-ip'] = ngx.var.remote_addr,
           ["cookie"] = "_mitata=" .. ngx.var.cookie__mitata .. ';_mitatacaptcha='
-        },
-        timeout = 1000 -- default I suppose
+        }
       })
     end)
 

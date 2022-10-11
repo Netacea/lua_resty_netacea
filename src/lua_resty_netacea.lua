@@ -1,5 +1,5 @@
 local _N = {}
-_N._VERSION = '0.2.0'
+_N._VERSION = '0.2.2'
 _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'
@@ -9,6 +9,18 @@ local http = require 'resty.http'
 local COOKIE_DELIMITER = '_/@#/'
 local ONE_HOUR = 60 * 60
 local ONE_DAY = ONE_HOUR * 24
+
+local function createHttpConnection()
+  local hc = http:new()
+
+  -- hc will be nil on error
+  if hc then
+    -- syntax: httpc:set_timeouts(connect_timeout, send_timeout, read_timeout)
+    hc:set_timeouts(500, 750, 750)
+  end
+
+  return hc
+end
 
 local function buildResult(idType, mitigationType, captchaState)
   return {
@@ -129,7 +141,7 @@ function _N:getMitigationRequestHeaders()
 end
 
 function _N:validateCaptcha(onEventFunc)
-  local hc = http:new()
+  local hc = createHttpConnection()
 
   ngx.req.read_body()
   local payload = ngx.req.get_body_data()
@@ -143,7 +155,6 @@ function _N:validateCaptcha(onEventFunc)
     {
       method = 'POST',
       headers = headers,
-      timeout = 1000,
       body = payload
     }
   )
@@ -344,7 +355,8 @@ function _N:getMitigationResultFromService(onEventFunc)
     end
   end
 
-  local hc = http:new()
+  local hc = createHttpConnection()
+
   local headers = self:getMitigationRequestHeaders()
 
   self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
@@ -353,8 +365,7 @@ function _N:getMitigationResultFromService(onEventFunc)
    self.mitigationEndpoint[self.endpointIndex + 1],
     {
       method = 'GET',
-      headers = headers,
-      timeout = 1000
+      headers = headers
     }
   )
   if (err) then return nil end
@@ -640,7 +651,6 @@ function _N:ingest()
     ["Content-Type"] = "application/json",
     ["x-netacea-api-key"] = self.apiKey;
   };
-  request_params.timeout = 1000; -- 1 second
 
   local request_task = function()
     local hc = http:new();
