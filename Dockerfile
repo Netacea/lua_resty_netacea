@@ -15,4 +15,10 @@ RUN cd $HOME
 COPY ./lua_resty_netacea-0.2-2.rockspec ./
 COPY ./src ./src
 
+RUN curl -L -o /tmp/luarocks-3.12.2-1.src.rock https://luarocks.org/luarocks-3.12.2-1.src.rock &&\
+    luarocks install /tmp/luarocks-3.12.2-1.src.rock &&\
+    rm /tmp/luarocks-3.12.2-1.src.rock
+
 RUN /usr/local/openresty/luajit/bin/luarocks make ./lua_resty_netacea-0.2-2.rockspec
+
+## https://github.com/luarocks/luarocks/issues/1797
