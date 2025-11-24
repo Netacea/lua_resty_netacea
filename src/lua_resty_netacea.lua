@@ -567,10 +567,10 @@ function _N:start_timers()
         -- Determine if we should send the batch
         if #batch >= BATCH_SIZE then
           should_send_batch = true
-          ngx.log(ngx.ERR, "NETACEA BATCH - sending full batch of ", #batch, " items")
+          ngx.log(ngx.DEBUG, "NETACEA BATCH - sending full batch of ", #batch, " items")
         elseif #batch > 0 and (current_time - last_send_time) >= BATCH_TIMEOUT then
           should_send_batch = true
-          ngx.log(ngx.ERR, "NETACEA BATCH - sending timeout batch of ", #batch, " items")
+          ngx.log(ngx.DEBUG, "NETACEA BATCH - sending timeout batch of ", #batch, " items")
         end
 
         -- Send batch if conditions are met
@@ -623,14 +623,14 @@ function _N:send_batch_to_kinesis(batch)
     })
   end
 
-  ngx.log( ngx.ERR, "NETACEA BATCH - sending batch of ", #records, " records to Kinesis stream ", self.kinesisProperties.stream_name );
+  ngx.log( ngx.DEBUG, "NETACEA BATCH - sending batch of ", #records, " records to Kinesis stream ", self.kinesisProperties.stream_name );
 
   local res, err = client:put_records(records)
   if err then
     ngx.log( ngx.ERR, "NETACEA BATCH - error sending batch to Kinesis: ", err );
     -- TODO: Consider implementing retry logic or dead letter queue
   else
-    ngx.log( ngx.ERR, "NETACEA BATCH - successfully sent batch to Kinesis, response status: ", res.status .. ", body: " .. (res.body or '') );
+    ngx.log( ngx.DEBUG, "NETACEA BATCH - successfully sent batch to Kinesis, response status: ", res.status .. ", body: " .. (res.body or '') );
   end
 
 end
