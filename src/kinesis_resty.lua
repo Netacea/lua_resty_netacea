@@ -128,7 +128,7 @@ function Kinesis:_send(target, payload)
     local httpc = http.new()
     httpc:set_timeout(5000)
     local headers = self:_sign_request(payload, target)
-    ngx.log(ngx.ERR, "Kinesis Request Headers: ", cjson.encode(headers))
+    ngx.log(ngx.DEBUG, "Kinesis Request Headers: ", cjson.encode(headers))
     local res, err = httpc:request_uri(self.endpoint, {
         method = "POST",
         body = payload,
