@@ -645,7 +645,7 @@ function _N:ingest()
     TimeLocal = vars.time_local,
     TimeUnixMsUTC = vars.msec * 1000,
     RealIp = self:getIpAddress(vars),
-    UserAgent = "MG HARDCODED TEST USER AGENT", -- vars.http_user_agent or "-",
+    UserAgent = vars.http_user_agent or "-",
     Status = vars.status,
     RequestTime = vars.request_time,
     BytesSent = vars.bytes_sent,
@@ -654,13 +654,12 @@ function _N:ingest()
     NetaceaMitigationApplied = ngx.ctx.bc_type,
     IntegrationType = self._MODULE_TYPE,
     IntegrationVersion = self._MODULE_VERSION,
-    -- TO TEST
     Query = vars.query_string or "",
-    BytesReceived = vars.bytes_received or 0, -- Doesn't seem to work
     RequestHost = vars.host or "-",
     RequestId = vars.request_id or "-",
+    ProtectionMode = self.mitigationType or "ERROR",
     -- TODO
-    ProtectionMode = "INGEST",    
+    BytesReceived = vars.bytes_received or 0, -- Doesn't seem to work
     NetaceaUserIdCookieStatus = 1,
     Optional = {}
   }
