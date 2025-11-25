@@ -1,5 +1,11 @@
 name: lua-resty-netacea-build
-on: [push, pull_request]
+on: 
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -7,9 +13,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@master
-      - name: Build Image
-        run: docker-compose build
-      - name: Lint
-        run: docker-compose run lint
       - name: Test
-        run: docker-compose run test
+        run: |
+          docker build --target test -t lua-resty-netacea-test .
+          docker run --rm lua-resty-netacea-test
+      - name: Lint
+        run: |
+          docker build --target lint -t lua-resty-netacea-lint .
+          docker run --rm lua-resty-netacea-lint
+      

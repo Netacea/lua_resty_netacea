@@ -17,28 +17,22 @@ services:
 
   test:
     build:
-      dockerfile: Dockerfile.test
+      dockerfile: Dockerfile
       context: .
+      target: test
     volumes:
       - "./src:/usr/src/src"
       - "./test:/usr/src/test"
-      - "./run_lua_tests.sh:/usr/src/run_lua_tests.sh"
-    security_opt:
-      - seccomp:unconfined
-    command: bash -c '. /usr/src/run_lua_tests.sh -s; exit $$?'
 
   lint:
     build:
-      dockerfile: Dockerfile.test
+      dockerfile: Dockerfile
       context: .
+      target: lint
     volumes:
       - "./.luacheckrc:/usr/src/.luacheckrc"
       - "./src:/usr/src/src"
       - "./test:/usr/src/test"
-      - "./run_lua_tests.sh:/usr/src/run_lua_tests.sh"
-    security_opt:
-      - seccomp:unconfined
-    command: sh -c 'cd /usr/src && luacheck --no-self -- /usr/src'
 
   nginx_lua:
     build:
