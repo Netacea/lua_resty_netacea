@@ -2,10 +2,11 @@ require 'busted.runner'()
 
 package.path = "../src/?.lua;" .. package.path
 
-local runner = require 'luacov.runner'
-runner.tick = true
-runner.init({savestepsize = 3})
-jit.off()
+-- Temporarily disable luacov to check if it's causing the hang
+-- local runner = require 'luacov.runner'
+-- runner.tick = true
+-- runner.init({savestepsize = 3})
+-- jit.off()
 
 local COOKIE_DELIMITER = '_/@#/'
 
