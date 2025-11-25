@@ -2,7 +2,8 @@ require 'busted.runner'()
 
 package.path = "../src/?.lua;" .. package.path
 
--- Temporarily disable luacov to check if it's causing the hang
+-- luacov is disabled because this runner causes the test to hang after completion.
+-- Need to take another look at this in future.
 -- local runner = require 'luacov.runner'
 -- runner.tick = true
 -- runner.init({savestepsize = 3})
