@@ -39,4 +39,4 @@ CMD ["bash", "-c", "./run_lua_tests.sh"]
 
 FROM test AS lint
 
-CMD ["sh", "-c", "\"cd /usr/src && luacheck --no-self -- /usr/src\""]
+CMD ["bash", "-c", "luacheck --no-self -- ./src"]
