@@ -95,6 +95,10 @@ function _N:new(options)
   if not self.secretKey or self.secretKey == '' then
     self.mitigationEnabled = false
   end
+  -- global:optional:cookieName
+  self.cookieName = options.cookieName or '_mitata'
+  -- global:optional:captchaCookieName
+  self.captchaCookieName = options.captchaCookieName or '_mitatacaptcha'
   -- global:optional:realIpHeader
   self.realIpHeader = options.realIpHeader or ''
   -- global:optional:userIdKey
@@ -122,9 +126,13 @@ end
 
 function _N:getMitigationRequestHeaders()
   local vars = ngx.var
-  local requestMitata = vars.cookie__mitata or ''
-  local requestMitataCaptcha = vars.cookie__mitatacaptcha or ''
-  local cookie = '_mitata=' .. requestMitata .. ';_mitatacaptcha=' .. requestMitataCaptcha
+
+  local cookie_name = "cookie_" .. self.cookieName
+  local captcha_cookie_name = "cookie_" .. self.captchaCookieName
+
+  local requestMitata = vars[cookie_name] or ''
+  local requestMitataCaptcha = vars[captcha_cookie_name] or ''
+  local cookie = self.cookieName .. '=' .. requestMitata .. ';' .. self.captchaCookieName .. '=' .. requestMitataCaptcha
   local headers = {
     ["x-netacea-api-key"] = self.apiKey,
     ["content-type"] = 'application/x-www-form-urlencoded',
@@ -167,7 +175,7 @@ function _N:validateCaptcha(onEventFunc)
   local mitigationType = res.headers['x-netacea-mitigate'] or self.mitigationTypes.NONE
   local captchaState = res.headers['x-netacea-captcha'] or self.captchaStates.NONE
 
-  self:addCookie('_mitatacaptcha', mitataCaptchaVal, mitataCaptchaExp)
+  self:addCookie(self.captchaCookieName, mitataCaptchaVal, mitataCaptchaExp)
 
   local exit_status = ngx.HTTP_FORBIDDEN
   if (captchaState == self.captchaStates.PASS) then
@@ -185,7 +193,7 @@ function _N:validateCaptcha(onEventFunc)
 end
 
 function _N:addMitataCookie(mitataVal, mitataExp)
-  self:addCookie('_mitata', mitataVal, mitataExp)
+  self:addCookie(self.cookieName, mitataVal, mitataExp)
   -- set to context so we can get this value for ingest service
   ngx.ctx.mitata = mitataVal
 end
@@ -213,7 +221,8 @@ function _N:bToHex(b)
 end
 
 function _N:parseMitataCookie()
-  local mitata_cookie = ngx.var.cookie__mitata or ''
+  
+  local mitata_cookie = ngx.var['cookie_' .. self.cookieName] or ''
   if (mitata_cookie == '') then return nil end
 
   local hash, epoch, uid, mitigation_values = mitata_cookie:match(
