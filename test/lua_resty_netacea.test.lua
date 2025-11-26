@@ -285,6 +285,36 @@ insulate("lua_resty_netacea.lua", function()
       local result = netacea:get_mitata_cookie()
       assert.are.same(expected, result)
     end)
+
+    it('works with custom cookie names', function()
+      local ngx_stub = require 'ngx'
+      local t = ngx_stub.time() + 20
+      local custom_cookie_name = 'custom_mitata'
+      local cookie = build_mitata_cookie(t, generate_uid(), '000', netacea_init_params.secretKey)
+      ngx_stub.var = {
+        ['cookie_' .. custom_cookie_name] = cookie
+      }
+      package.loaded['ngx'] = ngx_stub
+
+      local netacea = (require 'lua_resty_netacea'):new(
+        copy_table(
+          netacea_init_params,
+          { cookieName = custom_cookie_name }
+        )
+      )
+
+      local hash, epoch, uid, mitigation = cookie:match('(.*)_/@#/(.*)_/@#/(.*)_/@#/(.*)')
+      local expected = {
+        original = ngx_stub.var['cookie_' .. custom_cookie_name],
+        hash = hash,
+        epoch = tonumber(epoch),
+        uid = uid,
+        mitigation = mitigation
+      }
+      local result = netacea:get_mitata_cookie()
+      assert.are.same(expected, result)
+  
+    end)
   end)
 
   describe('mitigate', function()
@@ -404,6 +434,43 @@ insulate("lua_resty_netacea.lua", function()
         mitigationEnabled  = true,
         mitigationType     = 'MITIGATE'
       })
+
+      local logFunc = spy.new(function(res)
+        assert.equal(netacea.idTypes.IP, res.idType)
+        assert.equal(netacea.mitigationTypes.ALLOW, res.mitigationType)
+        assert.equal(netacea.captchaStates.NONE, res.captchaState)
+      end)
+
+      netacea:run(logFunc)
+
+      assert.spy(req_spy).was.not_called()
+      assert.spy(logFunc).was.called()
+    end)
+
+    
+
+    it('works with custom cookies', function()
+      local custom_cookie_name = 'custom_mitata'
+      local req_spy = setHttpResponse('-', nil, 'error')
+
+      local netacea = require 'lua_resty_netacea'
+      local mit = netacea.idTypes.IP .. netacea.mitigationTypes.ALLOW .. netacea.captchaStates.NONE
+      ngx.var["cookie_" .. custom_cookie_name] = build_mitata_cookie(ngx.time() + 20, generate_uid(), mit, mit_svc_secret)
+
+      package.loaded['lua_resty_netacea'] = nil
+
+      netacea = (require 'lua_resty_netacea'):new(
+        copy_table(
+          netacea_default_params,
+          { 
+            ingestEnabled      = false,
+            mitigationEndpoint = mit_svc_url,
+            apiKey             = mit_svc_api_key,
+            secretKey          = mit_svc_secret,    
+            cookieName = custom_cookie_name
+          }
+        )
+      )
 
       local logFunc = spy.new(function(res)
         assert.equal(netacea.idTypes.IP, res.idType)
