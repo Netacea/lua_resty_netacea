@@ -43,4 +43,13 @@ function NetaceaCookies.parseMitataCookie(mitata_cookie)
   }
 end
 
+function NetaceaCookies.buildMitataValToHash(hash, epoch, uid, mitigation_values)
+  local unhashed = NetaceaCookies.buildNonHashedMitataVal(epoch, uid, mitigation_values)
+  return hash .. COOKIE_DELIMITER .. unhashed
+end
+
+function NetaceaCookies.buildNonHashedMitataVal(epoch, uid, mitigation_values)
+  return epoch .. COOKIE_DELIMITER .. uid .. COOKIE_DELIMITER .. mitigation_values
+end
+
 return NetaceaCookies

@@ -214,15 +214,6 @@ function _N:bToHex(b)
   return hex
 end
 
-function _N:buildMitataValToHash(hash, epoch, uid, mitigation_values)
-  local unhashed = self:buildNonHashedMitataVal(epoch, uid, mitigation_values)
-  return hash .. COOKIE_DELIMITER .. unhashed
-end
-
-function _N:buildNonHashedMitataVal(epoch, uid, mitigation_values)
-  return epoch .. COOKIE_DELIMITER .. uid .. COOKIE_DELIMITER .. mitigation_values
-end
-
 function _N:generateUid()
   local randomString = buildRandomString(15)
   return 'c' .. randomString
@@ -238,7 +229,7 @@ function _N:setIngestMitataCookie()
   local mitataExpiry = ONE_DAY
 
   local new_hash = self:hashMitataCookie(epoch, uid, mitigation_values)
-  local mitataVal = self:buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
+  local mitataVal = netacea_cookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
 
   if (not mitata_values) then
     self:addMitataCookie(mitataVal, mitataExpiry)
@@ -255,7 +246,7 @@ function _N:setIngestMitataCookie()
   if (currentTime >= mitata_values.epoch) then
     uid = mitata_values.uid
     new_hash = self:hashMitataCookie(epoch, uid, mitigation_values)
-    mitataVal = self:buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
+    mitataVal = netacea_cookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
     self:addMitataCookie(mitataVal, mitataExpiry)
     return nil
   end
@@ -292,7 +283,7 @@ end
 function _N:hashMitataCookie(epoch, uid, mitigation_values)
   local hmac = require 'openssl.hmac'
   local base64 = require('base64')
-  local to_hash = self:buildNonHashedMitataVal(epoch, uid, mitigation_values)
+  local to_hash = netacea_cookies.buildNonHashedMitataVal(epoch, uid, mitigation_values)
   local hashed = hmac.new(self.secretKey, 'sha256'):final(to_hash)
   hashed = self:bToHex(hashed)
   hashed = base64.encode(hashed)
