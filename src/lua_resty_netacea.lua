@@ -2,6 +2,8 @@ local _N = {}
 _N._VERSION = '0.2.2'
 _N._TYPE = 'nginx'
 
+local netacea_cookies = require('lua_resty_netacea_cookies')
+
 local ngx = require 'ngx'
 local cjson = require 'cjson'
 local http = require 'resty.http'
@@ -175,7 +177,8 @@ function _N:validateCaptcha(onEventFunc)
   local mitigationType = res.headers['x-netacea-mitigate'] or self.mitigationTypes.NONE
   local captchaState = res.headers['x-netacea-captcha'] or self.captchaStates.NONE
 
-  self:addCookie(self.captchaCookieName, mitataCaptchaVal, mitataCaptchaExp)
+  ngx.log(ngx.ERR, 'Netacea captcha validation response: match=' .. idType .. ', mitigate=' .. mitigationType .. ', captcha=' .. captchaState, ', value=' .. mitataCaptchaVal)
+  ngx.header['Set-Cookie'] = netacea_cookies.addCookie(self.captchaCookieName, mitataCaptchaVal, mitataCaptchaExp)
 
   local exit_status = ngx.HTTP_FORBIDDEN
   if (captchaState == self.captchaStates.PASS) then
@@ -193,23 +196,14 @@ function _N:validateCaptcha(onEventFunc)
 end
 
 function _N:addMitataCookie(mitataVal, mitataExp)
-  self:addCookie(self.cookieName, mitataVal, mitataExp)
+  ngx.header['Set-Cookie'] = netacea_cookies.addCookie(self.cookieName, mitataVal, mitataExp)
+
   -- set to context so we can get this value for ingest service
   ngx.ctx.mitata = mitataVal
 end
 
 function _N:addCookie(name, value, expiry)
-  local cookies = ngx.ctx.cookies or {};
-  local expiryTime = ngx.cookie_time(ngx.time() + expiry)
-  local newCookie = name .. '=' .. value .. '; Path=/; Expires=' .. expiryTime
-  cookies[name] = newCookie
-  ngx.ctx.cookies = cookies
-
-  local setCookies = {}
-  for _, val in pairs(cookies) do
-    table.insert(setCookies, val)
-  end
-  ngx.header["Set-Cookie"] = setCookies
+  error("Deprecated")
 end
 
 function _N:bToHex(b)
@@ -218,33 +212,6 @@ function _N:bToHex(b)
     hex = hex .. string.format('%.2x', b:byte(i))
   end
   return hex
-end
-
-function _N:parseMitataCookie()
-  
-  local mitata_cookie = ngx.var['cookie_' .. self.cookieName] or ''
-  if (mitata_cookie == '') then return nil end
-
-  local hash, epoch, uid, mitigation_values = mitata_cookie:match(
-    '(.*)' ..  COOKIE_DELIMITER .. '(.*)' ..  COOKIE_DELIMITER .. '(.*)' ..  COOKIE_DELIMITER .. '(.*)')
-  epoch = tonumber(epoch)
-  if (hash == nil or
-    epoch == nil or
-    uid == nil or
-    uid == '' or
-    mitigation_values == nil or
-    mitigation_values == ''
-  ) then
-    return nil
-  end
-
-  return {
-    mitata_cookie = mitata_cookie,
-    hash = hash,
-    epoch = epoch,
-    uid = uid,
-    mitigation_values = mitigation_values
-  }
 end
 
 function _N:buildMitataValToHash(hash, epoch, uid, mitigation_values)
@@ -262,7 +229,8 @@ function _N:generateUid()
 end
 
 function _N:setIngestMitataCookie()
-  local mitata_values = self:parseMitataCookie()
+  local mitata_cookie = ngx.var['cookie_' .. self.cookieName] or ''
+  local mitata_values = netacea_cookies.parseMitataCookie(mitata_cookie)
   local currentTime = ngx.time()
   local epoch = currentTime + ONE_HOUR
   local uid = self:generateUid()
@@ -295,7 +263,8 @@ function _N:setIngestMitataCookie()
 end
 
 function _N:get_mitata_cookie()
-  local mitata_values = self:parseMitataCookie()
+  local mitata_cookie = ngx.var['cookie_' .. self.cookieName] or ''
+  local mitata_values = netacea_cookies.parseMitataCookie(mitata_cookie)
 
   if (not mitata_values) then
     return nil

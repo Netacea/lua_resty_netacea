@@ -13,6 +13,7 @@ services:
     volumes:
      - "./src/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf"
      - "./src/lua_resty_netacea.lua:/usr/local/openresty/site/lualib/lua_resty_netacea.lua"
+     - "./src/lua_resty_netacea_cookies.lua:/usr/local/openresty/site/lualib/lua_resty_netacea_cookies.lua"
 
   test:
     build:
