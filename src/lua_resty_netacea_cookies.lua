@@ -52,4 +52,24 @@ function NetaceaCookies.buildNonHashedMitataVal(epoch, uid, mitigation_values)
   return epoch .. COOKIE_DELIMITER .. uid .. COOKIE_DELIMITER .. mitigation_values
 end
 
+function NetaceaCookies.bToHex(b)
+  local hex = ''
+  for i = 1, #b do
+    hex = hex .. string.format('%.2x', b:byte(i))
+  end
+  return hex
+end
+
+function NetaceaCookies.hashMitataCookie(secretKey, epoch, uid, mitigation_values)
+  local hmac = require 'openssl.hmac'
+  local base64 = require('base64')
+  local to_hash = NetaceaCookies.buildNonHashedMitataVal(epoch, uid, mitigation_values)
+  local hashed = hmac.new(secretKey, 'sha256'):final(to_hash)
+  hashed = NetaceaCookies.bToHex(hashed)
+  hashed = base64.encode(hashed)
+
+  return hashed
+end
+
+
 return NetaceaCookies

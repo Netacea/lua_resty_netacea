@@ -206,14 +206,6 @@ function _N:addCookie(name, value, expiry)
   error("Deprecated")
 end
 
-function _N:bToHex(b)
-  local hex = ''
-  for i = 1, #b do
-    hex = hex .. string.format('%.2x', b:byte(i))
-  end
-  return hex
-end
-
 function _N:generateUid()
   local randomString = buildRandomString(15)
   return 'c' .. randomString
@@ -228,7 +220,7 @@ function _N:setIngestMitataCookie()
   local mitigation_values = _N.idTypes.NONE .. _N.mitigationTypes.NONE .. _N.captchaStates.NONE
   local mitataExpiry = ONE_DAY
 
-  local new_hash = self:hashMitataCookie(epoch, uid, mitigation_values)
+  local new_hash = netacea_cookies.hashMitataCookie(self.secretKey, epoch, uid, mitigation_values)
   local mitataVal = netacea_cookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
 
   if (not mitata_values) then
@@ -236,7 +228,7 @@ function _N:setIngestMitataCookie()
     return nil
   end
 
-  local our_hash = self:hashMitataCookie(mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
+  local our_hash = netacea_cookies.hashMitataCookie(self.secretKey, mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
 
   if (our_hash ~= mitata_values.hash) then
     self:addMitataCookie(mitataVal, mitataExpiry)
@@ -245,7 +237,7 @@ function _N:setIngestMitataCookie()
 
   if (currentTime >= mitata_values.epoch) then
     uid = mitata_values.uid
-    new_hash = self:hashMitataCookie(epoch, uid, mitigation_values)
+    new_hash = netacea_cookies.hashMitataCookie(self.secretKey, epoch, uid, mitigation_values)
     mitataVal = netacea_cookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
     self:addMitataCookie(mitataVal, mitataExpiry)
     return nil
@@ -265,7 +257,7 @@ function _N:get_mitata_cookie()
     return nil
   end
 
-  local our_hash = self:hashMitataCookie(mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
+  local our_hash = netacea_cookies.hashMitataCookie(self.secretKey, mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
 
   if (our_hash ~= mitata_values.hash) then
     return nil
@@ -278,17 +270,6 @@ function _N:get_mitata_cookie()
     uid = mitata_values.uid,
     mitigation = mitata_values.mitigation_values
   }
-end
-
-function _N:hashMitataCookie(epoch, uid, mitigation_values)
-  local hmac = require 'openssl.hmac'
-  local base64 = require('base64')
-  local to_hash = netacea_cookies.buildNonHashedMitataVal(epoch, uid, mitigation_values)
-  local hashed = hmac.new(self.secretKey, 'sha256'):final(to_hash)
-  hashed = self:bToHex(hashed)
-  hashed = base64.encode(hashed)
-
-  return hashed
 end
 
 function _N:getMitigationResultFromService(onEventFunc)

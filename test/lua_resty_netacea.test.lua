@@ -51,10 +51,11 @@ local function build_mitata_cookie(epoch, uid, mitigation_values, key)
   local hmac = require 'openssl.hmac'
   local base64 = require 'base64'
   local netacea = require 'lua_resty_netacea'
+  local netacea_cookies = require 'lua_resty_netacea_cookies'
 
   local value = epoch .. COOKIE_DELIMITER .. uid .. COOKIE_DELIMITER .. mitigation_values
   local hash = hmac.new(key, 'sha256'):final(value)
-  hash = netacea:bToHex(hash)
+  hash = netacea_cookies.bToHex(hash)
   hash = base64.encode(hash)
 
   return hash .. COOKIE_DELIMITER .. value
