@@ -202,10 +202,6 @@ function _N:addMitataCookie(mitataVal, mitataExp)
   ngx.ctx.mitata = mitataVal
 end
 
-function _N:addCookie(name, value, expiry)
-  error("Deprecated")
-end
-
 function _N:generateUid()
   local randomString = buildRandomString(15)
   return 'c' .. randomString
@@ -247,29 +243,7 @@ end
 
 function _N:get_mitata_cookie()
   local mitata_cookie = ngx.var['cookie_' .. self.cookieName] or ''
-  local mitata_values = netacea_cookies.parseMitataCookie(mitata_cookie)
-
-  if (not mitata_values) then
-    return nil
-  end
-
-  if (ngx.time() >= mitata_values.epoch) then
-    return nil
-  end
-
-  local our_hash = netacea_cookies.hashMitataCookie(self.secretKey, mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
-
-  if (our_hash ~= mitata_values.hash) then
-    return nil
-  end
-
-  return {
-    original = mitata_values.mitata_cookie,
-    hash = mitata_values.hash,
-    epoch = mitata_values.epoch,
-    uid = mitata_values.uid,
-    mitigation = mitata_values.mitigation_values
-  }
+  return netacea_cookies.validateMitataCookie(self.secretKey, mitata_cookie)
 end
 
 function _N:getMitigationResultFromService(onEventFunc)

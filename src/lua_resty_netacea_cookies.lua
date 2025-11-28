@@ -43,6 +43,32 @@ function NetaceaCookies.parseMitataCookie(mitata_cookie)
   }
 end
 
+function NetaceaCookies.validateMitataCookie(secretKey, mitata_cookie)
+  local mitata_values = NetaceaCookies.parseMitataCookie(mitata_cookie)
+
+  if (not mitata_values) then
+    return nil
+  end
+
+  if (ngx.time() >= mitata_values.epoch) then
+    return nil
+  end
+
+  local our_hash = NetaceaCookies.hashMitataCookie(secretKey, mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
+
+  if (our_hash ~= mitata_values.hash) then
+    return nil
+  end
+
+  return {
+    original = mitata_values.mitata_cookie,
+    hash = mitata_values.hash,
+    epoch = mitata_values.epoch,
+    uid = mitata_values.uid,
+    mitigation = mitata_values.mitigation_values
+  }
+end
+
 function NetaceaCookies.buildMitataValToHash(hash, epoch, uid, mitigation_values)
   local unhashed = NetaceaCookies.buildNonHashedMitataVal(epoch, uid, mitigation_values)
   return hash .. COOKIE_DELIMITER .. unhashed
