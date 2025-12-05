@@ -1280,4 +1280,199 @@ insulate("lua_resty_netacea.lua", function()
       assert.spy(logFunc).was.called()
     end)
   end)
+  describe('ingest only mode', function()
+    local luaMatch = require('luassert.match')
+    local mit_svc_url = 'someurl'
+    local mit_svc_api_key = 'somekey'
+    local mit_svc_secret = 'somesecret'
+    local ngx = nil
+
+    local function stubNgx()
+      local ngx_stub = {}
+
+      ngx_stub.var = {
+        http_user_agent = 'some_user_agent',
+        remote_addr = 'some_remote_addr',
+        cookie__mitata = '',
+        request_uri = '-'
+      }
+
+      ngx_stub.req = {
+        read_body = function() return nil end,
+        get_body_data = function() return nil end,
+        set_header = spy.new(function(_, _) return nil end)
+      }
+
+      ngx_stub.header = {}
+      ngx_stub.status = 0
+      ngx_stub.HTTP_FORBIDDEN = 402
+      ngx_stub.OK = 200
+
+      ngx_stub.exit = spy.new(function(_, _) return nil end)
+      ngx_stub.print = spy.new(function(_, _) return nil end)
+      ngx_stub.time = spy.new(function() return os.time() end)
+      ngx_stub.cookie_time = spy.new(function(time) return os.date("!%a, %d %b %Y %H:%M:%S GMT", time) end)
+      ngx_stub.ctx = {
+      }
+      ngx = wrap_table(require 'ngx', ngx_stub)
+      package.loaded['ngx'] = ngx
+    end
+
+    before_each(function()
+      package.loaded['lua_resty_netacea'] = nil
+
+      stubNgx()
+    end)
+
+    it('Sets a cookie if one does not yet exist', function()
+      -- Clear any existing cookie
+      ngx.var.cookie__mitata = ''
+      
+      local netacea = (require 'lua_resty_netacea'):new({
+        ingestEndpoint     = 'https://fakedomain.com',
+        mitigationEndpoint = mit_svc_url,
+        apiKey             = mit_svc_api_key,
+        secretKey          = mit_svc_secret,
+        realIpHeader       = '',
+        ingestEnabled      = true,
+        mitigationEnabled  = false,
+        mitigationType     = 'INJECT'
+      })
+
+      netacea:run(nil)
+
+      -- Verify that Set-Cookie header was called
+      assert.is_not_nil(ngx.header['Set-Cookie'])
+      
+      -- Verify cookie format matches expected pattern
+      local cookieString = ngx.header['Set-Cookie'][1]
+      assert.is_string(cookieString)
+      assert.is_string(cookieString:match('_mitata=.*; Path=/; Expires=.*'))
+      
+      -- Verify ngx.ctx.mitata was set
+      assert.is_not_nil(ngx.ctx.mitata)
+      assert.is_string(ngx.ctx.mitata)
+      
+      -- Verify the cookie value structure (hash_/@#/_epoch_/@#/_uid_/@#/_mitigation)
+      local mitataValue = ngx.ctx.mitata
+      local parts = {}
+      for part in mitataValue:gmatch('([^' .. COOKIE_DELIMITER .. ']+)') do
+        table.insert(parts, part)
+      end
+      
+      assert.is_equal(4, #parts, 'Cookie should have 4 parts separated by delimiters')
+      assert.is_not_nil(parts[1], 'Hash should be present')
+      assert.is_not_nil(parts[2], 'Epoch should be present')
+      assert.is_not_nil(parts[3], 'UID should be present')
+      assert.is_not_nil(parts[4], 'Mitigation values should be present')
+      
+      -- Verify epoch is in the future (should be current time + 1 hour)
+      local epoch = tonumber(parts[2])
+      assert.is_number(epoch)
+      assert.is_true(epoch > ngx.time(), 'Cookie expiration should be in the future')
+      assert.is_true(epoch <= ngx.time() + 3600, 'Cookie expiration should be approximately 1 hour from now')
+      
+      -- Verify UID is not empty
+      assert.is_true(#parts[3] > 0, 'UID should not be empty')
+      
+      -- Verify mitigation values are default (000 for ingest-only mode)
+      local netacea_mod = require 'lua_resty_netacea'
+      local expected_mitigation = netacea_mod.idTypes.NONE .. netacea_mod.mitigationTypes.NONE .. netacea_mod.captchaStates.NONE
+      assert.is_equal(expected_mitigation, parts[4], 'Mitigation values should be default for ingest-only mode')
+    end)
+
+    it('Refreshes an existing valid cookie when expired', function()
+      local current_time = ngx.time()
+      local expired_time = current_time - 10  -- 10 seconds ago
+      local original_uid = generate_uid()
+      
+      -- Set up an expired but otherwise valid cookie
+      ngx.var.cookie__mitata = build_mitata_cookie(expired_time, original_uid, '000', mit_svc_secret)
+      
+      local netacea = (require 'lua_resty_netacea'):new({
+        ingestEndpoint     = 'https://fakedomain.com',
+        mitigationEndpoint = mit_svc_url,
+        apiKey             = mit_svc_api_key,
+        secretKey          = mit_svc_secret,
+        realIpHeader       = '',
+        ingestEnabled      = true,
+        mitigationEnabled  = false,
+        mitigationType     = 'INJECT'
+      })
+
+      netacea:run(nil)
+
+      -- Verify that Set-Cookie header was set for refresh
+      assert.is_not_nil(ngx.header['Set-Cookie'])
+      assert.is_not_nil(ngx.ctx.mitata)
+      
+      -- Verify the refreshed cookie preserves the UID
+      local mitataValue = ngx.ctx.mitata
+      local parts = {}
+      for part in mitataValue:gmatch('([^' .. COOKIE_DELIMITER .. ']+)') do
+        table.insert(parts, part)
+      end
+      
+      assert.is_equal(original_uid, parts[3], 'UID should be preserved when refreshing expired cookie')
+      
+      -- Verify new epoch is in the future
+      local new_epoch = tonumber(parts[2])
+      assert.is_true(new_epoch > current_time, 'Refreshed cookie should have future expiration')
+    end)
+
+    it('Sets new cookie if existing cookie has invalid hash', function()
+      -- Create a cookie with invalid hash
+      local current_time = ngx.time()
+      local future_time = current_time + 3600
+      local invalid_cookie = 'invalid_hash' .. COOKIE_DELIMITER .. future_time .. COOKIE_DELIMITER .. generate_uid() .. COOKIE_DELIMITER .. '000'
+      
+      ngx.var.cookie__mitata = invalid_cookie
+      
+      local netacea = (require 'lua_resty_netacea'):new({
+        ingestEndpoint     = 'https://fakedomain.com',
+        mitigationEndpoint = mit_svc_url,
+        apiKey             = mit_svc_api_key,
+        secretKey          = mit_svc_secret,
+        realIpHeader       = '',
+        ingestEnabled      = true,
+        mitigationEnabled  = false,
+        mitigationType     = 'INJECT'
+      })
+
+      netacea:run(nil)
+
+      -- Verify that new cookie was set
+      assert.is_not_nil(ngx.header['Set-Cookie'])
+      assert.is_not_nil(ngx.ctx.mitata)
+      
+      -- Verify the new cookie is different from the invalid one
+      assert.is_not_equal(invalid_cookie, ngx.ctx.mitata)
+    end)
+
+    it('Does not modify valid existing cookie', function()
+      local current_time = ngx.time()
+      local future_time = current_time + 1800  -- 30 minutes in future
+      local uid = generate_uid()
+      local valid_cookie = build_mitata_cookie(future_time, uid, '000', mit_svc_secret)
+      
+      ngx.var.cookie__mitata = valid_cookie
+      
+      local netacea = (require 'lua_resty_netacea'):new({
+        ingestEndpoint     = 'https://fakedomain.com',
+        mitigationEndpoint = mit_svc_url,
+        apiKey             = mit_svc_api_key,
+        secretKey          = mit_svc_secret,
+        realIpHeader       = '',
+        ingestEnabled      = true,
+        mitigationEnabled  = false,
+        mitigationType     = 'INJECT'
+      })
+
+      netacea:run(nil)
+
+      -- Valid cookie should not trigger new Set-Cookie header
+      assert.is_nil(ngx.header['Set-Cookie'])
+      assert.is_nil(ngx.ctx.mitata)
+    end)
+  end)
 end)
