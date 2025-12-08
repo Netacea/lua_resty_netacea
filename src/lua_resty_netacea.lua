@@ -168,7 +168,7 @@ function _N:validateCaptcha(onEventFunc)
 
     local mitataVal = res.headers['x-netacea-mitata-value'] or ''
     local mitataExp = res.headers['x-netacea-mitata-expiry'] or 0
-    self:addMitataCookie(mitataVal, mitataExp)
+    self:addNewMitataCookie(mitataVal, mitataExp)
   end
 
   if onEventFunc then onEventFunc(buildResult(idType, mitigationType, captchaState)) end
@@ -177,7 +177,7 @@ function _N:validateCaptcha(onEventFunc)
   return ngx.exit(exit_status)
 end
 
-function _N:addMitataCookie(mitataVal, mitataExp)
+function _N:addNewMitataCookie(mitataVal, mitataExp)
   ngx.header['Set-Cookie'] = netacea_cookies.createSetCookieValues(self.cookieName, mitataVal, mitataExp)
 
   -- set to context so we can get this value for ingest service
@@ -199,14 +199,14 @@ function _N:setIngestMitataCookie()
 
   -- Set new cookie if none exists or invalid
   if (not mitata_values) then
-    self:addMitataCookie(mitataVal, mitataExpiry)
+    self:addNewMitataCookie(mitataVal, mitataExpiry)
     return nil
   end
 
   -- Validate hash and set new cookie if invalid
   local our_hash = netacea_cookies.hashMitataCookie(self.secretKey, mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
   if (our_hash ~= mitata_values.hash) then
-    self:addMitataCookie(mitataVal, mitataExpiry)
+    self:addNewMitataCookie(mitataVal, mitataExpiry)
     return nil
   end
 
@@ -215,7 +215,7 @@ function _N:setIngestMitataCookie()
     uid = mitata_values.uid
     new_hash = netacea_cookies.hashMitataCookie(self.secretKey, epoch, uid, mitigation_values)
     mitataVal = netacea_cookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
-    self:addMitataCookie(mitataVal, mitataExpiry)
+    self:addNewMitataCookie(mitataVal, mitataExpiry)
     return nil
   end
 
@@ -276,7 +276,7 @@ function _N:getMitigationResultFromService(onEventFunc)
 
   local mitataVal = res.headers['x-netacea-mitata-value'] or ''
   local mitataExp = res.headers['x-netacea-mitata-expiry'] or 0
-  self:addMitataCookie(mitataVal, mitataExp)
+  self:addNewMitataCookie(mitataVal, mitataExp)
   local match = res.headers['x-netacea-match'] or self.idTypes.NONE
   local mitigate = res.headers['x-netacea-mitigate'] or self.mitigationTypes.NONE
   local captcha = res.headers['x-netacea-captcha'] or self.captchaStates.NONE
