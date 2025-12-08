@@ -19,6 +19,9 @@ local NetaceaCookies = {}
 NetaceaCookies.__index = NetaceaCookies
 
 local COOKIE_DELIMITER = '_/@#/'
+local ONE_HOUR = 60 * 60
+local ONE_DAY = ONE_HOUR * 24
+
 
 --- Creates a formatted HTTP cookie string with expiration
 -- @param name string The cookie name
@@ -109,6 +112,75 @@ function NetaceaCookies.validateMitataCookie(secretKey, mitata_cookie)
   }
 end
 
+--- Validates a Mitata cookie using the provided secret key.
+-- This function verifies the integrity and authenticity of a Mitata cookie
+-- by validating it against the given secret key.
+--
+-- @param secretKey string The secret key used for cookie validation
+-- @param mitata_cookie string The Mitata cookie value to be validated
+-- @return table Returns table of cookie properties including:
+--   - valid: boolean indicating if the cookie is valid
+--   - uid: string User identifier from the cookie (nil if invalid)
+--   - mitata_cookie: string The (possibly new) Mitata cookie value
+--   - expiry: number Time in seconds until cookie expiry
+-- @usage
+--   local mitata = NetaceaCookies.validateIngestMitataCookie(secret, cookie)
+--   if mitata and mitata.valid then
+--     -- Cookie is valid, proceed with request
+--   end
+function NetaceaCookies.validateIngestMitataCookie(secretKey, mitata_cookie)
+  local mitata_values = NetaceaCookies.parseMitataCookie(mitata_cookie)
+  local currentTime = ngx.time()
+  local epoch = currentTime + ONE_HOUR
+  local uid = NetaceaCookies.generateUserid()
+  local mitigation_values = NetaceaCookies.idTypes.NONE .. NetaceaCookies.mitigationTypes.NONE .. NetaceaCookies.captchaStates.NONE
+  local mitataExpiry = ONE_DAY
+
+  -- Invalid cookie format
+  if (not mitata_values) then
+    local new_hash = NetaceaCookies.hashMitataCookie(secretKey, epoch, uid, mitigation_values)
+    local mitataVal = NetaceaCookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
+    return {
+      valid = false,
+      uid = nil,
+      mitata_cookie = mitataVal,
+      expiry = mitataExpiry
+    }
+  end
+
+  -- Invalid hash
+  local our_hash = NetaceaCookies.hashMitataCookie(secretKey, mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
+  if (our_hash ~= mitata_values.hash) then
+    local new_hash = NetaceaCookies.hashMitataCookie(secretKey, epoch, uid, mitigation_values)
+    local mitataVal = NetaceaCookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
+    return {
+      valid = false,
+      uid = nil,
+      mitata_cookie = mitataVal,
+      expiry = mitataExpiry
+    }
+  end
+
+  if (ngx.time() >= mitata_values.epoch) then
+    uid = mitata_values.uid
+    local new_hash = NetaceaCookies.hashMitataCookie(secretKey, epoch, uid, mitigation_values)
+    local mitataVal = NetaceaCookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
+    return {
+      valid = false,
+      uid = mitata_values.uid,
+      mitata_cookie = mitataVal,
+      expiry = mitataExpiry
+    }
+  end
+
+  return {
+    valid = true,
+    uid = mitata_values.uid,
+    mitata_cookie = mitata_cookie,
+    expiry = mitata_values.epoch - currentTime
+  }
+end
+
 --- Builds a complete mitata cookie value with hash prefix
 -- @param hash string The hash value to prefix
 -- @param epoch number Expiration timestamp
@@ -179,6 +251,60 @@ function NetaceaCookies.generateUserid()
   local randomString = buildRandomString(15)
   return 'c' .. randomString
 end
+
+
+NetaceaCookies['idTypesText'] = {}
+NetaceaCookies['idTypes'] = {
+  NONE = '0',
+  UA = '1',
+  IP = '2',
+  VISITOR = '3',
+  DATACENTER = '4',
+  SEV = '5'
+}
+
+NetaceaCookies['mitigationTypesText'] = {}
+NetaceaCookies['mitigationTypes'] = {
+  NONE = '0',
+  BLOCKED = '1',
+  ALLOW = '2',
+  HARDBLOCKED = '3'
+}
+
+NetaceaCookies['captchaStatesText'] = {}
+NetaceaCookies['captchaStates'] = {
+  NONE = '0',
+  SERVE = '1',
+  PASS = '2',
+  FAIL = '3',
+  COOKIEPASS = '4',
+  COOKIEFAIL = '5'
+}
+
+
+NetaceaCookies['matchBcTypes'] = {
+  ['1'] = 'ua',
+  ['2'] = 'ip',
+  ['3'] = 'visitor',
+  ['4'] = 'datacenter',
+  ['5'] = 'sev'
+}
+
+NetaceaCookies['mitigateBcTypes'] = {
+  ['1'] = 'blocked',
+  ['2'] = 'allow',
+  ['3'] = 'hardblocked',
+  ['4'] = 'block'
+}
+
+NetaceaCookies['captchaBcTypes'] = {
+  ['1'] = 'captcha_serve',
+  ['2'] = 'captcha_pass',
+  ['3'] = 'captcha_fail',
+  ['4'] = 'captcha_cookiepass',
+  ['5'] = 'captcha_cookiefail'
+}
+
 
 
 return NetaceaCookies

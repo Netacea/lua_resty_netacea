@@ -187,38 +187,10 @@ end
 -- Sets or refreshes the mitata cookie for ingest-only mode
 function _N:setIngestMitataCookie()
   local mitata_cookie = ngx.var['cookie_' .. self.cookieName] or ''
-  local mitata_values = netacea_cookies.parseMitataCookie(mitata_cookie)
-  local currentTime = ngx.time()
-  local epoch = currentTime + ONE_HOUR
-  local uid = netacea_cookies.generateUserid()
-  local mitigation_values = _N.idTypes.NONE .. _N.mitigationTypes.NONE .. _N.captchaStates.NONE
-  local mitataExpiry = ONE_DAY
-
-  local new_hash = netacea_cookies.hashMitataCookie(self.secretKey, epoch, uid, mitigation_values)
-  local mitataVal = netacea_cookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
-
-  -- Set new cookie if none exists or invalid
-  if (not mitata_values) then
-    self:addNewMitataCookie(mitataVal, mitataExpiry)
-    return nil
+  local mitata = netacea_cookies.validateIngestMitataCookie(self.secretKey, mitata_cookie)
+  if (not mitata.valid) then
+    self:addNewMitataCookie(mitata.mitata_cookie, mitata.expiry)
   end
-
-  -- Validate hash and set new cookie if invalid
-  local our_hash = netacea_cookies.hashMitataCookie(self.secretKey, mitata_values.epoch, mitata_values.uid, mitata_values.mitigation_values)
-  if (our_hash ~= mitata_values.hash) then
-    self:addNewMitataCookie(mitataVal, mitataExpiry)
-    return nil
-  end
-
-  -- Set new cookie if expired
-  if (currentTime >= mitata_values.epoch) then
-    uid = mitata_values.uid
-    new_hash = netacea_cookies.hashMitataCookie(self.secretKey, epoch, uid, mitigation_values)
-    mitataVal = netacea_cookies.buildMitataValToHash(new_hash, epoch, uid, mitigation_values)
-    self:addNewMitataCookie(mitataVal, mitataExpiry)
-    return nil
-  end
-
 end
 
 function _N:get_mitata_cookie()
