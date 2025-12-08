@@ -47,24 +47,6 @@ local function serveBlock()
   return ngx.exit(ngx.HTTP_FORBIDDEN);
 end
 
-local function buildRandomString(length)
-  local chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  local randomString = ''
-
-  math.randomseed(os.time())
-
-  local charTable = {}
-  for c in chars:gmatch"." do
-      table.insert(charTable, c)
-  end
-
-  for i=1, length do -- luacheck: ignore i
-      randomString = randomString .. charTable[math.random(1, #charTable)]
-  end
-
-  return randomString
-end
-
 function _N:new(options)
   local n = {}
   setmetatable(n, self)
@@ -202,18 +184,13 @@ function _N:addMitataCookie(mitataVal, mitataExp)
   ngx.ctx.mitata = mitataVal
 end
 
-function _N:generateUid()
-  local randomString = buildRandomString(15)
-  return 'c' .. randomString
-end
-
 -- Sets or refreshes the mitata cookie for ingest-only mode
 function _N:setIngestMitataCookie()
   local mitata_cookie = ngx.var['cookie_' .. self.cookieName] or ''
   local mitata_values = netacea_cookies.parseMitataCookie(mitata_cookie)
   local currentTime = ngx.time()
   local epoch = currentTime + ONE_HOUR
-  local uid = self:generateUid()
+  local uid = netacea_cookies.generateUserid()
   local mitigation_values = _N.idTypes.NONE .. _N.mitigationTypes.NONE .. _N.captchaStates.NONE
   local mitataExpiry = ONE_DAY
 

@@ -157,5 +157,28 @@ function NetaceaCookies.hashMitataCookie(secretKey, epoch, uid, mitigation_value
   return hashed
 end
 
+local function buildRandomString(length)
+  local chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  local randomString = ''
+
+  math.randomseed(os.time())
+
+  local charTable = {}
+  for c in chars:gmatch"." do
+      table.insert(charTable, c)
+  end
+
+  for i=1, length do -- luacheck: ignore i
+      randomString = randomString .. charTable[math.random(1, #charTable)]
+  end
+
+  return randomString
+end
+
+function NetaceaCookies.generateUserid()
+  local randomString = buildRandomString(15)
+  return 'c' .. randomString
+end
+
 
 return NetaceaCookies
