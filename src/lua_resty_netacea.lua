@@ -8,10 +8,6 @@ local ngx = require 'ngx'
 local cjson = require 'cjson'
 local http = require 'resty.http'
 
-local COOKIE_DELIMITER = '_/@#/'
-local ONE_HOUR = 60 * 60
-local ONE_DAY = ONE_HOUR * 24
-
 local function createHttpConnection()
   local hc = http:new()
 
