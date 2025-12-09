@@ -525,6 +525,7 @@ end
 
 -- Data queue for batch processing
 local data_queue = new_queue(5000, true);
+local dead_letter_queue = new_queue(1000, true);
 local BATCH_SIZE = 25; -- Kinesis PutRecords supports up to 500 records, using 25 for more frequent sends
 local BATCH_TIMEOUT = 1.0; -- Send batch after 1 second even if not full
 
@@ -555,6 +556,14 @@ function _N:start_timers()
 
         local current_time = ngx.now()
         local should_send_batch = false
+
+        -- Check dead_letter_queue first
+        while dead_letter_queue:count() > 0 and #batch < BATCH_SIZE do
+          local dlq_item = dead_letter_queue:pop()
+          if dlq_item then
+            table.insert(batch, dlq_item)
+          end
+        end
 
         -- Collect data items for batch
         while data_queue:count() > 0 and #batch < BATCH_SIZE do
@@ -628,7 +637,12 @@ function _N:send_batch_to_kinesis(batch)
   local res, err = client:put_records(records)
   if err then
     ngx.log( ngx.ERR, "NETACEA BATCH - error sending batch to Kinesis: ", err );
-    -- TODO: Consider implementing retry logic or dead letter queue
+    for _, record in ipairs(records) do
+      local ok, dlq_err = dead_letter_queue:push(record)
+      if not ok and dlq_err then
+        ngx.log( ngx.ERR, "NETACEA BATCH - failed to push record to dead letter queue: ", dlq_err );
+      end
+    end
   else
     ngx.log( ngx.DEBUG, "NETACEA BATCH - successfully sent batch to Kinesis, response status: ", res.status .. ", body: " .. (res.body or '') );
   end
