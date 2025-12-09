@@ -556,13 +556,18 @@ function _N:start_timers()
 
         local current_time = ngx.now()
         local should_send_batch = false
-
+        local dead_letter_items = 0
         -- Check dead_letter_queue first
         while dead_letter_queue:count() > 0 and #batch < BATCH_SIZE do
           local dlq_item = dead_letter_queue:pop()
           if dlq_item then
             table.insert(batch, dlq_item)
+            dead_letter_items = dead_letter_items + 1
           end
+        end
+
+        if (dead_letter_items > 0) then
+          ngx.log(ngx.DEBUG, "NETACEA BATCH - added ", dead_letter_items, " items from dead letter queue to batch")
         end
 
         -- Collect data items for batch
@@ -590,7 +595,7 @@ function _N:start_timers()
         end
 
         -- Sleep briefly if no data to process
-        if data_queue:count() == 0 then
+        if data_queue:count() == 0 and dead_letter_queue:count() == 0 then
           ngx.sleep(0.1)
         end
       end
@@ -637,8 +642,8 @@ function _N:send_batch_to_kinesis(batch)
   local res, err = client:put_records(records)
   if err then
     ngx.log( ngx.ERR, "NETACEA BATCH - error sending batch to Kinesis: ", err );
-    for _, record in ipairs(records) do
-      local ok, dlq_err = dead_letter_queue:push(record)
+    for _, data_item in ipairs(batch) do
+      local ok, dlq_err = dead_letter_queue:push(data_item)
       if not ok and dlq_err then
         ngx.log( ngx.ERR, "NETACEA BATCH - failed to push record to dead letter queue: ", dlq_err );
       end
