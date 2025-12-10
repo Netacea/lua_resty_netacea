@@ -1,8 +1,5 @@
 FROM openresty/openresty:xenial AS base
 
-LABEL author="Curtis Johnson <curtis.johnson@netacea.com>"
-LABEL maintainer="Curtis Johnson <curtis.johnson@netacea.com>"
-
 USER root
 
 WORKDIR /usr/src
