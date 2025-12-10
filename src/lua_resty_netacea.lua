@@ -1,3 +1,5 @@
+local Kinesis = require("kinesis_resty")
+
 local _N = {}
 _N._VERSION = '0.2.2'
 _N._TYPE = 'nginx'
@@ -55,6 +57,7 @@ function _N:new(options)
   if not self.ingestEndpoint or self.ingestEndpoint == '' then
     self.ingestEnabled = false
   end
+  self.kinesisProperties = options.kinesisProperties or nil
   -- mitigate:optional:mitigationEnabled
   self.mitigationEnabled = options.mitigationEnabled or false
   -- mitigate:required:mitigationEndpoint
@@ -335,8 +338,8 @@ function _N:setBcType(match, mitigate, captcha)
   return mitigationApplied
 end
 
-----------------------------------------------------------------------
--- start STASH code to enable async HTTP requests from logging context
+---------------------------------------------------------
+-- Async ingest from logging context
 
 local function new_queue(size, allow_wrapping)
   -- Head is next insert, tail is next read
@@ -392,106 +395,136 @@ local function new_queue(size, allow_wrapping)
   };
 end
 
-local semaphore  = require "ngx.semaphore";
-
-local async_queue_low_priority = new_queue(5000, true);
-local queue_sema_low_priority  = semaphore.new();
-local requests_sema            = semaphore.new();
-
-requests_sema:post(1024); -- allow up to 1024 sending timer contexts
+-- Data queue for batch processing
+local data_queue = new_queue(5000, true);
+local dead_letter_queue = new_queue(1000, true);
+local BATCH_SIZE = 25; -- Kinesis PutRecords supports up to 500 records, using 25 for more frequent sends
+local BATCH_TIMEOUT = 1.0; -- Send batch after 1 second even if not full
 
 --------------------------------------------------------
--- start timers to execute requests tasks
+-- start batch processor for Kinesis data
 
 function _N:start_timers()
 
-  -- start requests executor
-  local executor;
-  executor = function( premature )
+  -- start batch processor
+  local batch_processor;
+  batch_processor = function( premature )
 
     if premature then return end
+    
     local execution_thread = ngx.thread.spawn( function()
+      local batch = {}
+      local last_send_time = ngx.now()
 
       while true do
-        while async_queue_low_priority:count() == 0 do
-          if ngx.worker.exiting() == true then return end
-
-          queue_sema_low_priority:wait(0.3); -- sleeping for 300 milliseconds
-        end
-
-        repeat
-          if ngx.worker.exiting() == true then return end
-
-          -- to make sure that there are only up to 1024 executor's timers at any time
-          local ok, _ = requests_sema:wait(0.1);
-        until ok and ok == true;
-
-        local task = async_queue_low_priority:pop();
-        if task then
-          -- run tasks in separate timer contexts to avoid accumulating large numbers of dead corutines
-          ngx.timer.at( 0, function()
-            local ok, err = pcall( task );
-            if not ok and err then
-              ngx.log( ngx.ERR, "NETACEA API - sending task has failed with error: ", err );
-            end
-
-            local cnt = 1;
-
-            while async_queue_low_priority:count() > 0 and cnt < 100 do
-
-              local next_task = async_queue_low_priority:pop();
-
-              if not next_task then
-                queue_sema_low_priority:wait(0.3); -- sleeping for 300 milliseconds
-                next_task = async_queue_low_priority:pop();
-              end
-
-              if next_task then
-                ok, err = pcall( next_task );
-                if not ok and err then
-                  ngx.log( ngx.ERR, "NETACEA - sending task has failed with error: ", err );
-                else
-                  ngx.sleep(0.01);
-                end
-              else
-                if queue_sema_low_priority:count() > async_queue_low_priority:count() then
-                  queue_sema_low_priority:wait(0)
-                end
-                break;
-              end
-
-              cnt = cnt + 1;
-            end
-
-            requests_sema:post(1);
-          end );
-        else -- semaphore is out of sync with queue - need to drain it
-          if queue_sema_low_priority:count() > async_queue_low_priority:count() then
-            queue_sema_low_priority:wait(0)
+        -- Check if worker is exiting
+        if ngx.worker.exiting() == true then 
+          -- Send any remaining data before exiting
+          if #batch > 0 then
+            self:send_batch_to_kinesis(batch)
           end
-          requests_sema:post(1);
+          return 
         end
 
+        local current_time = ngx.now()
+        local should_send_batch = false
+        local dead_letter_items = 0
+        -- Check dead_letter_queue first
+        while dead_letter_queue:count() > 0 and #batch < BATCH_SIZE do
+          local dlq_item = dead_letter_queue:pop()
+          if dlq_item then
+            table.insert(batch, dlq_item)
+            dead_letter_items = dead_letter_items + 1
+          end
+        end
+
+        if (dead_letter_items > 0) then
+          ngx.log(ngx.DEBUG, "NETACEA BATCH - added ", dead_letter_items, " items from dead letter queue to batch")
+        end
+
+        -- Collect data items for batch
+        while data_queue:count() > 0 and #batch < BATCH_SIZE do
+          local data_item = data_queue:pop()
+          if data_item then
+            table.insert(batch, data_item)
+          end
+        end
+
+        -- Determine if we should send the batch
+        if #batch >= BATCH_SIZE then
+          should_send_batch = true
+          ngx.log(ngx.DEBUG, "NETACEA BATCH - sending full batch of ", #batch, " items")
+        elseif #batch > 0 and (current_time - last_send_time) >= BATCH_TIMEOUT then
+          should_send_batch = true
+          ngx.log(ngx.DEBUG, "NETACEA BATCH - sending timeout batch of ", #batch, " items")
+        end
+
+        -- Send batch if conditions are met
+        if should_send_batch then
+          self:send_batch_to_kinesis(batch)
+          batch = {}  -- Reset batch
+          last_send_time = current_time
+        end
+
+        -- Sleep briefly if no data to process
+        if data_queue:count() == 0 and dead_letter_queue:count() == 0 then
+          ngx.sleep(0.1)
+        end
       end
-    end );
+    end )
 
     local ok, err = ngx.thread.wait( execution_thread );
     if not ok and err then
-      ngx.log( ngx.ERR, "NETACEA - executor thread has failed with error: ", err );
+      ngx.log( ngx.ERR, "NETACEA - batch processor thread has failed with error: ", err );
     end
 
-    -- If the worker is exiting, don't queue another executor
+    -- If the worker is exiting, don't queue another processor
     if ngx.worker.exiting() then
       return
     end
 
-    ngx.timer.at( 0, executor );
+    ngx.timer.at( 0, batch_processor );
   end
 
-  ngx.timer.at( 0, executor );
+  ngx.timer.at( 0, batch_processor );
 
 end
--- end STASH code
+
+function _N:send_batch_to_kinesis(batch)
+  if not batch or #batch == 0 then return end
+  
+  local client = Kinesis.new(
+      self.kinesisProperties.stream_name,
+      self.kinesisProperties.region,
+      self.kinesisProperties.aws_access_key,
+      self.kinesisProperties.aws_secret_key
+  )
+
+  -- Convert batch data to Kinesis records format
+  local records = {}
+  for _, data_item in ipairs(batch) do
+    table.insert(records, {
+      partition_key = buildRandomString(10),
+      data = "[" .. cjson.encode(data_item) .. "]"
+    })
+  end
+
+  ngx.log( ngx.DEBUG, "NETACEA BATCH - sending batch of ", #records, " records to Kinesis stream ", self.kinesisProperties.stream_name );
+
+  local res, err = client:put_records(records)
+  if err then
+    ngx.log( ngx.ERR, "NETACEA BATCH - error sending batch to Kinesis: ", err );
+    for _, data_item in ipairs(batch) do
+      local ok, dlq_err = dead_letter_queue:push(data_item)
+      if not ok and dlq_err then
+        ngx.log( ngx.ERR, "NETACEA BATCH - failed to push record to dead letter queue: ", dlq_err );
+      end
+    end
+  else
+    ngx.log( ngx.DEBUG, "NETACEA BATCH - successfully sent batch to Kinesis, response status: ", res.status .. ", body: " .. (res.body or '') );
+  end
+
+end
 
 function _N:ingest()
   if not self.ingestEnabled then return nil end
@@ -500,7 +533,8 @@ function _N:ingest()
 
   local data = {
     Request = vars.request_method .. " " .. vars.request_uri .. " " .. vars.server_protocol,
-    TimeLocal = vars.msec * 1000,
+    TimeLocal = vars.time_local,
+    TimeUnixMsUTC = vars.msec * 1000,
     RealIp = self:getIpAddress(vars),
     UserAgent = vars.http_user_agent or "-",
     Status = vars.status,
@@ -510,41 +544,25 @@ function _N:ingest()
     NetaceaUserIdCookie = mitata,
     NetaceaMitigationApplied = ngx.ctx.bc_type,
     IntegrationType = self._MODULE_TYPE,
-    IntegrationVersion = self._MODULE_VERSION
+    IntegrationVersion = self._MODULE_VERSION,
+    Query = vars.query_string or "",
+    RequestHost = vars.host or "-",
+    RequestId = vars.request_id or "-",
+    ProtectionMode = self.mitigationType or "ERROR",
+    -- TODO
+    BytesReceived = vars.bytes_received or 0, -- Doesn't seem to work
+    NetaceaUserIdCookieStatus = 1,
+    Optional = {}
   }
 
-  -- start STASH code
-  local request_params = {};
-
-  request_params.body  = cjson.encode(data);
-  request_params.method  = "POST";
-  request_params.headers = {
-    ["Content-Length"] = #request_params.body,
-    ["Content-Type"] = "application/json",
-    ["x-netacea-api-key"] = self.apiKey;
-  };
-
-  local request_task = function()
-    local hc = http:new();
-
-    local res, err = hc:request_uri( self.ingestEndpoint, request_params );
-
-    if not res and err then
-      ngx.log( ngx.ERR, "Netacea ingest - failed API request - error: ", err );
-      return;
-    else
-      if res.status ~= 200 and res.status ~= 201 then
-        ngx.log( ngx.ERR, "Netacea ingest - failed API request - status: ", res.status );
-        return;
-      end
-    end
+  -- Add data directly to the queue for batch processing
+  local ok, err = data_queue:push(data)
+  if not ok and err then
+    ngx.log(ngx.WARN, "NETACEA INGEST - failed to queue data: ", err)
+  else
+    ngx.log(ngx.DEBUG, "NETACEA INGEST - queued data item, queue size: ", data_queue:count())
   end
 
-  -- request_params are not going to get deallocated as long as function stays in the queue
-  local ok, _ = async_queue_low_priority:push( request_task );
-  if ok then queue_sema_low_priority:post(1) end
-
-  -- end STASH code
 end
 
 _N['idTypesText'] = {}
