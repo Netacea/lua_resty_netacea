@@ -504,7 +504,7 @@ function _N:send_batch_to_kinesis(batch)
   local records = {}
   for _, data_item in ipairs(batch) do
     table.insert(records, {
-      partition_key = buildRandomString(10),
+      partition_key = netacea_cookies.buildRandomString(10),
       data = "[" .. cjson.encode(data_item) .. "]"
     })
   end

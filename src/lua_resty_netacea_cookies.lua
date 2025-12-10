@@ -229,7 +229,7 @@ function NetaceaCookies.hashMitataCookie(secretKey, epoch, uid, mitigation_value
   return hashed
 end
 
-local function buildRandomString(length)
+function NetaceaCookies.buildRandomString(length)
   local chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   local randomString = ''
 
@@ -248,7 +248,7 @@ local function buildRandomString(length)
 end
 
 function NetaceaCookies.generateUserid()
-  local randomString = buildRandomString(15)
+  local randomString = NetaceaCookies.buildRandomString(15)
   return 'c' .. randomString
 end
 
