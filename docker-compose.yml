@@ -6,6 +6,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: .
+      target: build
     container_name: resty
     ports:
      - "8080:80"
@@ -13,7 +14,13 @@ services:
     volumes:
      - "./src/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf"
      - "./src/lua_resty_netacea.lua:/usr/local/openresty/site/lualib/lua_resty_netacea.lua"
+     - "./src/lua_resty_netacea_cookies_v3.lua:/usr/local/openresty/site/lualib/lua_resty_netacea_cookies_v3.lua"
      - "./src/kinesis_resty.lua:/usr/local/openresty/site/lualib/kinesis_resty.lua"
+     - "./src/lua_resty_netacea_ingest.lua:/usr/local/openresty/site/lualib/lua_resty_netacea_ingest.lua"
+     - "./src/netacea_utils.lua:/usr/local/openresty/site/lualib/netacea_utils.lua"
+     - "./src/lua_resty_netacea_constants.lua:/usr/local/openresty/site/lualib/lua_resty_netacea_constants.lua"
+     - "./src/lua_resty_netacea_protector_client.lua:/usr/local/openresty/site/lualib/lua_resty_netacea_protector_client.lua"     
+     
 
   test:
     build:
