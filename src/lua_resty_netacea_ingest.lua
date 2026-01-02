@@ -80,7 +80,7 @@ function Ingest:new(options, _N_parent)
     n.dead_letter_queue = new_queue(n.dead_letter_queue_size, true);
     n.BATCH_SIZE = n.batch_size; -- Kinesis PutRecords supports up to 500 records, using 25 for more frequent sends
     n.BATCH_TIMEOUT = n.batch_timeout; -- Send batch after 1 second even if not full
-    ngx.log( ngx.ERR, "NETACEA INGEST - initialized with queue size ", n.queue_size, ", dead letter queue size ", n.dead_letter_queue_size, ", batch size ", n.BATCH_SIZE, ", batch timeout ", n.BATCH_TIMEOUT );
+    ngx.log( ngx.DEBUG, "NETACEA INGEST - initialized with queue size ", n.queue_size, ", dead letter queue size ", n.dead_letter_queue_size, ", batch size ", n.BATCH_SIZE, ", batch timeout ", n.BATCH_TIMEOUT );
     return n
 end
 -- Data queue for batch processing
@@ -93,7 +93,7 @@ function Ingest:start_timers()
 
   -- start batch processor
   local batch_processor;
-  ngx.log( ngx.ERR, "NETACEA INGEST - starting batch processor timer" );
+  ngx.log( ngx.DEBUG, "NETACEA INGEST - starting batch processor timer" );
   batch_processor = function( premature )
 
     if premature then return end
@@ -112,7 +112,7 @@ function Ingest:start_timers()
           return 
         end
 
-        ngx.log( ngx.DEBUG, "NETACEA BATCH - checking for data to batch, current queue size: ", self.data_queue:count(), ", dead letter queue size: ", self.dead_letter_queue:count() );
+        -- ngx.log( ngx.DEBUG, "NETACEA BATCH - checking for data to batch, current queue size: ", self.data_queue:count(), ", dead letter queue size: ", self.dead_letter_queue:count() );
 
         local current_time = ngx.now()
         local should_send_batch = false
@@ -197,7 +197,7 @@ function Ingest:send_batch_to_kinesis(batch)
     })
   end
 
-  ngx.log( ngx.ERR, "NETACEA BATCH - sending batch of ", #records, " records to Kinesis stream ", self.stream_name );
+  ngx.log( ngx.DEBUG, "NETACEA BATCH - sending batch of ", #records, " records to Kinesis stream ", self.stream_name );
 
   local res, err = client:put_records(records)
   if err then
