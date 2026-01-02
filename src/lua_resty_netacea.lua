@@ -172,7 +172,7 @@ function _N:refreshSession(reason)
       self.secretKey,
       ngx.ctx.NetaceaState.client,
       ngx.ctx.NetaceaState.UserId,
-      utils.buildRandomString(16),
+      netacea_cookies.newUserId(),
       reason,
       os.time(),
       grace_period,
@@ -213,7 +213,7 @@ function _N:mitigate()
 
   if not parsed_cookie.valid then
     if not ngx.ctx.NetaceaState.UserId then
-      ngx.ctx.NetaceaState.UserId = utils.buildRandomString(16)
+      ngx.ctx.NetaceaState.UserId = netacea_cookies.newUserId()
     end
 
     local protector_result = self.protectorClient:checkReputation()

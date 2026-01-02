@@ -354,4 +354,27 @@ describe("lua_resty_netacea_cookies_v3", function()
             end
         end)
     end)
+    describe("newUserId #only", function()
+        it("should generate a user ID starting with 'c' followed by 15 characters", function()
+            local userId = NetaceaCookies.newUserId()
+            
+            assert.is_string(userId)
+            assert.is.equal(16, #userId)
+            assert.is.equal('c', userId:sub(1,1))
+        end)
+
+        it("should generate different user IDs on multiple calls", function()
+            local userId1 = NetaceaCookies.newUserId()
+            local userId2 = NetaceaCookies.newUserId()
+            
+            assert.is_not.equal(userId1, userId2)
+        end)
+
+        it("should generate user ID with alphanumeric characters", function()
+            local userId = NetaceaCookies.newUserId()
+            local pattern = "^c[%w_%-]+$"  -- Alphanumeric, underscore, hyphen
+            
+            assert.is_true(userId:match(pattern) ~= nil, "User ID should match pattern: " .. pattern)
+        end)
+    end)
 end)
