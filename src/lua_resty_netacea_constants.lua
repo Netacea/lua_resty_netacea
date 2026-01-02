@@ -7,7 +7,12 @@ Constants['idTypes'] = {
   IP = '2',
   VISITOR = '3',
   DATACENTER = '4',
-  SEV = '5'
+  SEV = '5',
+  ORGANISATION = '6',
+  ASN = '7',
+  COUNTRY = '8',
+  COMBINATION = '9',
+  HEADERFP = 'b'
 }
 
 Constants['mitigationTypesText'] = {}
@@ -44,7 +49,12 @@ Constants['matchBcTypes'] = {
   ['2'] = 'ip',
   ['3'] = 'visitor',
   ['4'] = 'datacenter',
-  ['5'] = 'sev'
+  ['5'] = 'sev',
+  ['6'] = 'organisation',
+  ['7'] = 'asn',
+  ['8'] = 'country',
+  ['9'] = 'combination',
+  ['b'] = 'headerFP'
 }
 
 Constants['mitigateBcTypes'] = {
