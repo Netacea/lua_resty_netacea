@@ -39,5 +39,7 @@ luac.out
 *.x86_64
 *.hex
 
+# Backup files
+*.bak
 
 tags
