@@ -4,7 +4,8 @@ function M.buildRandomString(length)
   local chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   local randomString = ''
 
-  math.randomseed(os.time())
+  local seed = os.time() * 1000000 + (os.clock() * 1000000) % 1000000
+  math.randomseed(seed)
 
   local charTable = {}
   for c in chars:gmatch"." do
@@ -20,7 +21,11 @@ end
 
 function M:getIpAddress(vars, realIpHeader)
   if not realIpHeader then return vars.remote_addr end
-  return vars['http_' .. realIpHeader] or vars.remote_addr
+  local realIpHeaderValue = vars['http_' .. realIpHeader]
+  if not realIpHeaderValue or realIpHeaderValue == '' then
+      return vars.remote_addr
+  end
+  return realIpHeaderValue or vars.remote_addr
 end
 
 
