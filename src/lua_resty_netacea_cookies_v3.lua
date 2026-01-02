@@ -6,27 +6,6 @@ local constants = require 'lua_resty_netacea_constants'
 local NetaceaCookies = {}
 NetaceaCookies.__index = NetaceaCookies
 
-
---- Creates a formatted HTTP cookie string with expiration
--- @param name string The cookie name
--- @param value string The cookie value  
--- @param expiry number The expiry time in seconds from now
--- @return table Array of formatted cookie strings ready for Set-Cookie header
-function NetaceaCookies.createSetCookieValues(name, value, expiry)
-    local cookies = ngx.ctx.cookies or {};
-    local expiryTime = ngx.cookie_time(ngx.time() + tonumber(expiry))
-    local newCookie = name .. '=' .. value .. '; Path=/; Expires=' .. expiryTime
-    cookies[name] = newCookie
-    ngx.ctx.cookies = cookies
-
-    local setCookies = {}
-    for _, val in pairs(cookies) do
-        table.insert(setCookies, val)
-    end
-    return setCookies
-end
-
-
 function NetaceaCookies.generateNewCookieValue(secretKey, client, user_id, cookie_id, issue_reason, issue_timestamp, grace_period, match, mitigation, captcha, settings)
     local plaintext = ngx.encode_args({
         cip = client,

@@ -63,8 +63,12 @@ function _N:new(options)
   end
   -- global:optional:cookieName
   n.cookieName = options.cookieName or '_mitata'
+  -- global:optional:cookieAttributes
+  n.cookieAttributes = options.cookieAttributes or 'Max-Age=86400; Path=/;'
   -- global:optional:captchaCookieName
   n.captchaCookieName = options.captchaCookieName or '_mitatacaptcha'
+  -- global:optional:captchaCookieAttributes
+  n.captchaCookieAttributes = options.captchaCookieAttributes or 'Max-Age=86400; Path=/;'
   -- global:optional:realIpHeader
   n.realIpHeader = options.realIpHeader or ''
   -- global:optional:userIdKey
@@ -182,11 +186,11 @@ function _N:refreshSession(reason)
       {}
     )
     local cookies = {
-      self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';'
+      self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';' .. self.cookieAttributes
     }
     
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
-      table.insert(cookies, self.captchaCookieName .. '=' .. protector_result.captcha_cookie .. ';')
+      table.insert(cookies, self.captchaCookieName .. '=' .. protector_result.captcha_cookie .. ';' .. self.captchaCookieAttributes)
     end
     
     ngx.header['Set-Cookie'] = cookies
