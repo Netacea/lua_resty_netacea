@@ -2,10 +2,15 @@ local jwt = require "resty.jwt"
 local ngx = require 'ngx'
 
 local constants = require 'lua_resty_netacea_constants'
-
+local utils = require 'netacea_utils'
 local NetaceaCookies = {}
 NetaceaCookies.__index = NetaceaCookies
 
+
+function NetaceaCookies.newUserId()
+    local randomBytes = utils.buildRandomString(15)
+    return 'c'..randomBytes
+end
 
 --- Creates a formatted HTTP cookie string with expiration
 -- @param name string The cookie name
