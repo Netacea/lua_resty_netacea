@@ -28,5 +28,15 @@ function M:getIpAddress(vars, realIpHeader)
   return realIpHeaderValue or vars.remote_addr
 end
 
+function M.parseOption(option, defaultValue)
+  if type(option) == "string" then
+    option = option:match("^%s*(.-)%s*$")
+  end
+  if option == nil or option == '' then
+      return defaultValue
+  end
+  return option
+end
+
 
 return M
