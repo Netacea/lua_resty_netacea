@@ -170,7 +170,8 @@ function _N:handleSession()
   end
 
   -- Get captcha cookie
-  local captcha_cookie = ngx.var['cookie_' .. self.captchaCookieName] or ''
+  local captcha_cookie_raw = ngx.var['cookie_' .. self.captchaCookieName] or ''
+  local captcha_cookie = netacea_cookies.decrypt(self.secretKey, captcha_cookie_raw)
   if captcha_cookie and captcha_cookie ~= '' then
     ngx.ctx.NetaceaState.captcha_cookie = captcha_cookie
   end
@@ -200,7 +201,8 @@ function _N:refreshSession(reason)
     }
     
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
-      table.insert(cookies, self.captchaCookieName .. '=' .. protector_result.captcha_cookie .. ';')
+      local captcha_cookie_encrypted = netacea_cookies.encrypt(self.secretKey, protector_result.captcha_cookie)
+      table.insert(cookies, self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';')
     end
     
     ngx.header['Set-Cookie'] = cookies
