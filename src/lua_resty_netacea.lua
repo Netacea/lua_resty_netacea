@@ -77,11 +77,11 @@ function _N:new(options)
   -- global:optional:cookieName
   n.cookieName = utils.parseOption(options.cookieName, '_mitata')
   -- global:optional:cookieAttributes
-  n.cookieAttributes = options.cookieAttributes or 'Max-Age=86400; Path=/;'
+  n.cookieAttributes = utils.parseOption(options.cookieAttributes, 'Max-Age=86400; Path=/;')
   -- global:optional:captchaCookieName
   n.captchaCookieName = utils.parseOption(options.captchaCookieName, '_mitatacaptcha')  --options.captchaCookieName or '_mitatacaptcha'
   -- global:optional:captchaCookieAttributes
-  n.captchaCookieAttributes = options.captchaCookieAttributes or 'Max-Age=86400; Path=/;'
+  n.captchaCookieAttributes = utils.parseOption(options.captchaCookieAttributes, 'Max-Age=86400; Path=/;')
   -- global:optional:realIpHeader
   n.realIpHeader = utils.parseOption(options.realIpHeader, '')
   -- global:optional:userIdKey
