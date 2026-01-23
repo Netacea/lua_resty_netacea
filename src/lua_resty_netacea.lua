@@ -65,7 +65,7 @@ function _N:new(options)
     n.mitigationEnabled = false
   end
   -- mitigate:required:mitigationType
-  n.mitigationType = options.mitigationType or ''
+  n.mitigationType = utils.parseOption(options.mitigationType, '')
   if not n.mitigationType or (n.mitigationType ~= 'MITIGATE' and n.mitigationType ~= 'INJECT') then
     n.mitigationEnabled = false
   end
@@ -75,15 +75,15 @@ function _N:new(options)
     n.mitigationEnabled = false
   end
   -- global:optional:cookieName
-  n.cookieName = options.cookieName or '_mitata'
+  n.cookieName = utils.parseOption(options.cookieName, '_mitata')
   -- global:optional:captchaCookieName
-  n.captchaCookieName = options.captchaCookieName or '_mitatacaptcha'
+  n.captchaCookieName = utils.parseOption(options.captchaCookieName, '_mitatacaptcha')  --options.captchaCookieName or '_mitatacaptcha'
   -- global:optional:realIpHeader
-  n.realIpHeader = options.realIpHeader or ''
+  n.realIpHeader = utils.parseOption(options.realIpHeader, '')
   -- global:optional:userIdKey
-  n.userIdKey = options.userIdKey or ''
+  n.userIdKey = utils.parseOption(options.userIdKey, '')
   -- global:required:apiKey
-  n.apiKey = options.apiKey
+  n.apiKey = utils.parseOption(options.apiKey, nil)
   if not n.apiKey then
     n.ingestEnabled = false
     n.mitigationEnabled = false
@@ -170,7 +170,8 @@ function _N:handleSession()
   end
 
   -- Get captcha cookie
-  local captcha_cookie = ngx.var['cookie_' .. self.captchaCookieName] or ''
+  local captcha_cookie_raw = ngx.var['cookie_' .. self.captchaCookieName] or ''
+  local captcha_cookie = netacea_cookies.decrypt(self.secretKey, captcha_cookie_raw)
   if captcha_cookie and captcha_cookie ~= '' then
     ngx.ctx.NetaceaState.captcha_cookie = captcha_cookie
   end
@@ -200,7 +201,8 @@ function _N:refreshSession(reason)
     }
     
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
-      table.insert(cookies, self.captchaCookieName .. '=' .. protector_result.captcha_cookie .. ';')
+      local captcha_cookie_encrypted = netacea_cookies.encrypt(self.secretKey, protector_result.captcha_cookie)
+      table.insert(cookies, self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';')
     end
     
     ngx.header['Set-Cookie'] = cookies
