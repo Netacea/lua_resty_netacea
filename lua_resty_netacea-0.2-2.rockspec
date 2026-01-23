@@ -15,7 +15,8 @@ dependencies = {
   "luaossl",
   "lua-resty-http",
   "lbase64",
-  "lua-cjson"
+  "lua-cjson",
+  "lua-resty-jwt"
 }
 external_dependencies = {}
 build = {
