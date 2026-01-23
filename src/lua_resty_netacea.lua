@@ -206,7 +206,7 @@ function _N:refreshSession(reason)
     
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
       local captcha_cookie_encrypted = netacea_cookies.encrypt(self.secretKey, protector_result.captcha_cookie)
-      table.insert(cookies, self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';')
+      table.insert(cookies, self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';'.. self.captchaCookieAttributes)
     end
     
     ngx.header['Set-Cookie'] = cookies
