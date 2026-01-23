@@ -76,8 +76,12 @@ function _N:new(options)
   end
   -- global:optional:cookieName
   n.cookieName = utils.parseOption(options.cookieName, '_mitata')
+  -- global:optional:cookieAttributes
+  n.cookieAttributes = utils.parseOption(options.cookieAttributes, 'Max-Age=86400; Path=/;')
   -- global:optional:captchaCookieName
   n.captchaCookieName = utils.parseOption(options.captchaCookieName, '_mitatacaptcha')  --options.captchaCookieName or '_mitatacaptcha'
+  -- global:optional:captchaCookieAttributes
+  n.captchaCookieAttributes = utils.parseOption(options.captchaCookieAttributes, 'Max-Age=86400; Path=/;')
   -- global:optional:realIpHeader
   n.realIpHeader = utils.parseOption(options.realIpHeader, '')
   -- global:optional:userIdKey
@@ -197,12 +201,12 @@ function _N:refreshSession(reason)
       {}
     )
     local cookies = {
-      self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';'
+      self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';' .. self.cookieAttributes
     }
     
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
       local captcha_cookie_encrypted = netacea_cookies.encrypt(self.secretKey, protector_result.captcha_cookie)
-      table.insert(cookies, self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';')
+      table.insert(cookies, self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';'.. self.captchaCookieAttributes)
     end
     
     ngx.header['Set-Cookie'] = cookies
