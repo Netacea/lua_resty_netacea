@@ -1,4 +1,4 @@
-FROM openresty/openresty:xenial AS base
+FROM openresty/openresty:noble AS base
 
 USER root
 
