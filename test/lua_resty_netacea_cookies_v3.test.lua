@@ -1,3 +1,4 @@
+require("silence_g_write_guard")
 require 'busted.runner'()
 
 package.path = "../src/?.lua;" .. package.path
@@ -83,20 +84,13 @@ describe("lua_resty_netacea_cookies_v3", function()
             end)
         }
 
-        -- Mock constants
-        constants_mock = {
-            issueReasons = {
-                NO_SESSION = 'no_session',
-                EXPIRED_SESSION = 'expired_session',
-                INVALID_SESSION = 'invalid_session',
-                IP_CHANGE = 'ip_change'
-            }
-        }
+        -- Import actual constants
+        local constants = require('lua_resty_netacea_constants')
 
         -- Set up package mocks
         package.loaded['resty.jwt'] = jwt_mock
         package.loaded['ngx'] = ngx_mock
-        package.loaded['lua_resty_netacea_constants'] = constants_mock
+        package.loaded['lua_resty_netacea_constants'] = constants
 
         NetaceaCookies = require('lua_resty_netacea_cookies_v3')
     end)

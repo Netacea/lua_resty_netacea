@@ -1,3 +1,4 @@
+require("silence_g_write_guard")
 require 'busted.runner'()
 
 package.path = "../src/?.lua;" .. package.path

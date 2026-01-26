@@ -1,0 +1,1 @@
+rawset(_G, 'lfs', false) -- silence g_write_guard about lfs module in busted
