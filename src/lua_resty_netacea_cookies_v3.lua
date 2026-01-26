@@ -49,6 +49,7 @@ end
 
 
 function NetaceaCookies.generateNewCookieValue(secretKey, client, user_id, cookie_id, issue_reason, issue_timestamp, grace_period, match, mitigation, captcha, settings)
+    settings = settings or {}
     local plaintext = ngx.encode_args({
         cip = client,
         uid = user_id,
@@ -105,7 +106,18 @@ function NetaceaCookies.parseMitataCookie(cookie, secretKey)
         end
     end
 
-    if tonumber(decoded.ist) + tonumber(decoded.grp) < ngx.time() then
+    -- Validate numeric fields
+    local ist = tonumber(decoded.ist)
+    local grp = tonumber(decoded.grp)
+    
+    if not ist or not grp then
+        return {
+            valid = false,
+            reason = constants['issueReasons'].INVALID_SESSION
+        }
+    end
+
+    if ist + grp < ngx.time() then
         return {
             valid = false,
             user_id = decoded.uid,
