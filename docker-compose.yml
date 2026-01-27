@@ -30,6 +30,8 @@ services:
     volumes:
       - "./src:/usr/src/src"
       - "./test:/usr/src/test"
+      - "./run_lua_tests.sh:/usr/src/run_lua_tests.sh"
+      - ".luacov:/usr/src/.luacov"
 
   lint:
     build:
