@@ -4,6 +4,7 @@ local Ingest = require("lua_resty_netacea_ingest")
 local netacea_cookies = require('lua_resty_netacea_cookies_v3')
 local utils = require("netacea_utils")
 local protector_client = require("lua_resty_netacea_protector_client")
+local Constants = require("lua_resty_netacea_constants")
 
 local _N = {}
 _N._VERSION = '0.2.2'

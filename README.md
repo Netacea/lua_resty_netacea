@@ -1,16 +1,42 @@
 # lua_resty_netacea
-An Openresty module for easy integration of Netacea services
+An Openresty module for easy integration of Netacea services. This repo is for developing the package. The package can be accessed by the Luarocks package management platform. See the Netacea documentation for making use of the module.
 
-# Building the base image
-All the images used by docker rely on a specific base image being available on your local docker registry. You can ensure you have this by running the following command
-```sh
-docker build -t lua_resty_netacea:latest .
-```
+## Published package
 
-# Running Tests
-`docker-compose build` then `docker-compose run test`
+The Netacea package is available on the Luarocks package manager. Publishing is handled by the Netacea team.
 
-## nginx.conf - mitigate
+## Docker images
+The Dockerfile contains a multi-stage build, including:
+
+| Stage name | Based on | Description |
+| -- | -- | -- |
+| base  |  openresty/openresty:noble | Base image of Openresty with updated packages around openSSL |
+| build | base | Working Openresty instance with Netacea plugin installed using luarocks and rockspec file |
+| test | build | Lua packages installed for testing and linting. Command overridden to run unit tests |
+| lint | test | Command overridden to run luacheck linter and output results | 
+
+The docker compose file is used to mount local files to the right place in the image to support development.
+
+### Run development version
+
+1. Update `./src/conf/nginx.conf` to include Netacea configuration and server configuration. Default is the NGINX instance will just return a static "Hello world" page. See "Configuration" below
+2. `docker-compose up resty`
+3. Access [](http://localhost:8080)
+
+### Run tests
+
+#### Unit tests
+
+Without coverage report: `docker-compose run test`
+With coverage report (sent to stdout) `docker-compose run -e LUACOV_REPORT=1 test [> output.html]`
+
+#### Linter
+
+`docker-compose run linter`
+
+## Configuration
+
+### nginx.conf - mitigate
 ```
 worker_processes 1;
 
@@ -57,7 +83,7 @@ http {
 }
 ```
 
-## nginx.conf - inject
+### nginx.conf - inject
 ```
 worker_processes 1;
 
