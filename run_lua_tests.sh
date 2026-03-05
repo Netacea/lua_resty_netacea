@@ -1,3 +1,4 @@
+#!/bin/bash
 # sh /docker/pull-changes.sh
 
 OPENRESTY="/usr/local/openresty"
@@ -33,8 +34,8 @@ function exit_script {
     echo ""
     echo "coverage stats file: ${STATS_SRC}"
     end_tests
-    echo $1
-    exit $1
+    echo "$1"
+    exit "$1"
 }
 
 function end_tests {
@@ -52,12 +53,12 @@ echo ""
 echo "BEGIN TESTS"
 echo ""
 
-cd $TEST_DIR
+cd $TEST_DIR || exit 1
 PREV=$(pwd)
 
 files=$(find . -name '*.test.lua')
 
-while read line; do
+while read -r line; do
     echo " -- TEST FILE: ${line}"
     DIR=$(dirname "${line}")
     FILE=$(basename "${line}")
@@ -73,7 +74,7 @@ while read line; do
         if [ $OPT_EARLY_EXIT -eq 1 ]; then break; fi
     fi
 
-    cd "$PREV"
+        cd "$PREV" || exit 1
     echo ""
 done <<< "$files"
 
