@@ -12,7 +12,6 @@ _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'
 local cjson = require 'cjson'
-local http = require 'resty.http'
 
 local function serveCaptcha(captchaBody)
   ngx.status = ngx.HTTP_FORBIDDEN
@@ -33,12 +32,12 @@ function _N:new(options)
   local n = {}
   setmetatable(n, self)
   self.__index = self
-  
+
   -- ingest:optional:ingestEnabled
   n.ingestEnabled = options.ingestEnabled or false
   -- ingest:required:ingestEndpoint
   n.ingestEndpoint = options.ingestEndpoint
-  
+
   n.kinesisProperties = options.kinesisProperties or nil
 
   if not n.kinesisProperties then
@@ -80,7 +79,7 @@ function _N:new(options)
   -- global:optional:cookieAttributes
   n.cookieAttributes = utils.parseOption(options.cookieAttributes, 'Max-Age=86400; Path=/;')
   -- global:optional:captchaCookieName
-  n.captchaCookieName = utils.parseOption(options.captchaCookieName, '_mitatacaptcha')  --options.captchaCookieName or '_mitatacaptcha'
+  n.captchaCookieName = utils.parseOption(options.captchaCookieName, '_mitatacaptcha')
   -- global:optional:captchaCookieAttributes
   n.captchaCookieAttributes = utils.parseOption(options.captchaCookieAttributes, 'Max-Age=86400; Path=/;')
   -- global:optional:realIpHeader
@@ -127,7 +126,9 @@ function _N:getBestMitigation(protector_result)
   if (captcha == Constants.captchaStates.PASS) then return nil end
   if (captcha == Constants.captchaStates.COOKIEPASS) then return nil end
 
-  if (mitigate == Constants.mitigationTypes.BLOCKED and (captcha == Constants.captchaStates.SERVE or captcha == Constants['captchaStates'].COOKIEFAIL )) then
+  if (mitigate == Constants.mitigationTypes.BLOCKED
+      and (captcha == Constants.captchaStates.SERVE
+        or captcha == Constants['captchaStates'].COOKIEFAIL)) then
     return 'captcha'
   end
 
@@ -204,17 +205,18 @@ function _N:refreshSession(reason)
     local cookies = {
       self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';' .. self.cookieAttributes
     }
-    
+
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
       local captcha_cookie_encrypted = netacea_cookies.encrypt(self.secretKey, protector_result.captcha_cookie)
-      table.insert(cookies, self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';'.. self.captchaCookieAttributes)
+      table.insert(cookies,
+        self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';'.. self.captchaCookieAttributes)
     end
-    
+
     ngx.header['Set-Cookie'] = cookies
 end
 
 function _N:handleCaptcha()
-  local parsed_cookie = self:handleSession()
+  self:handleSession()
 
   ngx.req.read_body()
   local captcha_data = ngx.req.get_body_data()
@@ -222,7 +224,7 @@ function _N:handleCaptcha()
   ngx.ctx.NetaceaState.protector_result = protector_result
   ngx.ctx.NetaceaState.grace_period = -1000
   ngx.log(ngx.DEBUG, "NETACEA CAPTCHA - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
-  
+
   self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
   ngx.exit(protector_result.exit_status)
 end

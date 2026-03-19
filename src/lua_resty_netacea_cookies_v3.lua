@@ -30,7 +30,7 @@ end
 
 --- Creates a formatted HTTP cookie string with expiration
 -- @param name string The cookie name
--- @param value string The cookie value  
+-- @param value string The cookie value
 -- @param expiry number The expiry time in seconds from now
 -- @return table Array of formatted cookie strings ready for Set-Cookie header
 function NetaceaCookies.createSetCookieValues(name, value, expiry)
@@ -48,7 +48,9 @@ function NetaceaCookies.createSetCookieValues(name, value, expiry)
 end
 
 
-function NetaceaCookies.generateNewCookieValue(secretKey, client, user_id, cookie_id, issue_reason, issue_timestamp, grace_period, match, mitigation, captcha, settings)
+function NetaceaCookies.generateNewCookieValue(
+    secretKey, client, user_id, cookie_id, issue_reason,
+    issue_timestamp, grace_period, match, mitigation, captcha, settings)
     settings = settings or {}
     local plaintext = ngx.encode_args({
         cip = client,
@@ -64,7 +66,7 @@ function NetaceaCookies.generateNewCookieValue(secretKey, client, user_id, cooki
     })
 
     local encoded = NetaceaCookies.encrypt(secretKey, plaintext)
-    
+
     return {
         mitata_jwe = encoded,
         mitata_plaintext = plaintext
@@ -109,7 +111,7 @@ function NetaceaCookies.parseMitataCookie(cookie, secretKey)
     -- Validate numeric fields
     local ist = tonumber(decoded.ist)
     local grp = tonumber(decoded.grp)
-    
+
     if not ist or not grp then
         return {
             valid = false,
