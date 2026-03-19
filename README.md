@@ -13,26 +13,26 @@ The Dockerfile contains a multi-stage build, including:
 | base  |  openresty/openresty:noble | Base image of Openresty with updated packages around openSSL |
 | build | base | Working Openresty instance with Netacea plugin installed using luarocks and rockspec file |
 | test | build | Lua packages installed for testing and linting. Command overridden to run unit tests |
-| lint | test | Command overridden to run luacheck linter and output results | 
+| lint | test | Command overridden to run luacheck linter and output results |
 
 The docker compose file is used to mount local files to the right place in the image to support development.
 
 ### Run development version
 
 1. Update `./src/conf/nginx.conf` to include Netacea configuration and server configuration. Default is the NGINX instance will just return a static "Hello world" page. See "Configuration" below
-2. `docker-compose up resty`
+2. `docker compose up resty`
 3. Access [](http://localhost:8080)
 
 ### Run tests
 
 #### Unit tests
 
-Without coverage report: `docker-compose run test`
-With coverage report (sent to stdout) `docker-compose run -e LUACOV_REPORT=1 test [> output.html]`
+Without coverage report: `docker compose run --build test`
+With coverage report (sent to stdout) `docker compose run -e LUACOV_REPORT=1 --build test [> output.html]`
 
 #### Linter
 
-`docker-compose run linter`
+`docker compose run --build lint`
 
 ## Configuration
 
