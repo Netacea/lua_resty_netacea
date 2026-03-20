@@ -21,6 +21,7 @@ RUN /usr/local/openresty/luajit/bin/luarocks install cluacov
 RUN /usr/local/openresty/luajit/bin/luarocks install require
 RUN /usr/local/openresty/luajit/bin/luarocks install luacheck
 
+COPY ./.luacov ./.luacov
 COPY ./test ./test
 COPY ./run_lua_tests.sh ./run_lua_tests.sh
 RUN chmod +x ./run_lua_tests.sh

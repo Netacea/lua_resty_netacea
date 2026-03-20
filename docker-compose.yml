@@ -2,7 +2,6 @@ version: '3.5'
 
 services:
   resty:
-    image: lua_resty_netacea:latest
     build:
       dockerfile: Dockerfile
       context: .
@@ -30,6 +29,8 @@ services:
     volumes:
       - "./src:/usr/src/src"
       - "./test:/usr/src/test"
+      - "./run_lua_tests.sh:/usr/src/run_lua_tests.sh"
+      - ".luacov:/usr/src/.luacov"
 
   lint:
     build:
