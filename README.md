@@ -1,4 +1,5 @@
 # lua_resty_netacea
+
 An Openresty module for easy integration of Netacea services. This repo is for developing the package. The package can be accessed by the Luarocks package management platform. See the Netacea documentation for making use of the module.
 
 ## Published package
@@ -6,6 +7,7 @@ An Openresty module for easy integration of Netacea services. This repo is for d
 The Netacea package is available on the Luarocks package manager. Publishing is handled by the Netacea team.
 
 ## Docker images
+
 The Dockerfile contains a multi-stage build, including:
 
 | Stage name | Based on | Description |
@@ -27,6 +29,13 @@ The docker compose file is used to mount local files to the right place in the i
 
 #### Unit tests
 
+##### In dev container
+
+Without coverage report: `./run_lua_tests.sh`
+With coverage report (sent to stdout) `export LUACOV_REPORT=1 && ./run_lua_tests.sh`
+
+##### Docker compose
+
 Without coverage report: `docker compose run --build test`
 With coverage report (sent to stdout) `docker compose run -e LUACOV_REPORT=1 --build test [> output.html]`
 
@@ -37,7 +46,8 @@ With coverage report (sent to stdout) `docker compose run -e LUACOV_REPORT=1 --b
 ## Configuration
 
 ### nginx.conf - mitigate
-```
+
+```conf
 worker_processes 1;
 
 events {
@@ -84,7 +94,8 @@ http {
 ```
 
 ### nginx.conf - inject
-```
+
+```conf
 worker_processes 1;
 
 events {
