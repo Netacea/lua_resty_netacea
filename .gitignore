@@ -39,5 +39,13 @@ luac.out
 *.x86_64
 *.hex
 
+# Backup files
+*.bak
 
 tags
+
+# luacov reports
+luacov.report
+luacov.report.*
+luacov.stats.out
+luacov.stats.out.*
