@@ -7,7 +7,7 @@ local http = require "resty.http"
 local cjson = require "cjson.safe"
 local sha256 = require "resty.sha256"
 local str = require "resty.string"
-local ngx = ngx
+local ngx = require 'ngx'
 
 local Kinesis = {}
 Kinesis.__index = Kinesis

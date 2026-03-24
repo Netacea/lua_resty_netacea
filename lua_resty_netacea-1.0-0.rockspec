@@ -1,5 +1,5 @@
 package = "lua_resty_netacea"
-version = "0.2-2"
+version = "1.0-0"
 source = {
   url = "git://github.com/Netacea/lua_resty_netacea",
   branch = "master"
@@ -7,7 +7,7 @@ source = {
 description = {
   summary = "An Openresty module for easy integration of Netacea services",
   homepage = "https://github.com/Netacea/lua_resty_netacea",
-  maintainer = "Dan Lyon",
+  maintainer = "Netacea Ltd.",
   license = "MIT"
 }
 dependencies = {

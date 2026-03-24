@@ -1,4 +1,4 @@
-Constants = {}
+local Constants = {}
 
 Constants['idTypesText'] = {}
 Constants['idTypes'] = {

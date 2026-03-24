@@ -1,0 +1,27 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.187.0/containers/docker-existing-dockerfile
+{
+	"name": "lua_resty_netacea Dev container",
+	"build": {
+		"dockerfile": "../Dockerfile",
+		"target": "test"
+	},
+	// Add the IDs of extensions you want installed when the container is created.
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"bierner.markdown-emoji", // Markdown Emoji
+				"bierner.markdown-mermaid", // Markdown Mermaid
+				"DavidAnson.vscode-markdownlint", // Markdown Lint
+				"ms-azuretools.vscode-docker", // Docker
+				"oderwat.indent-rainbow", // indent-rainbow
+			],
+			"settings": {
+			}
+		}
+	},
+	"remoteUser": "ubuntu",
+	"features": {
+	"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+	}
+}

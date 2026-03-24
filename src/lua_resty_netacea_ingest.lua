@@ -59,12 +59,12 @@ local function new_queue(size, allow_wrapping)
 end
 
 
-function Ingest:new(options, _N_parent)
+function Ingest:new(options, N_parent)
     local n = {}
     setmetatable(n, self)
     self.__index = self
 
-    n._N = _N_parent
+    n._N = N_parent
 
     n.stream_name = options.stream_name or ''
     n.region = options.region or 'eu-west-1'
@@ -80,7 +80,9 @@ function Ingest:new(options, _N_parent)
     n.dead_letter_queue = new_queue(n.dead_letter_queue_size, true);
     n.BATCH_SIZE = n.batch_size; -- Kinesis PutRecords supports up to 500 records, using 25 for more frequent sends
     n.BATCH_TIMEOUT = n.batch_timeout; -- Send batch after 1 second even if not full
-    ngx.log( ngx.DEBUG, "NETACEA INGEST - initialized with queue size ", n.queue_size, ", dead letter queue size ", n.dead_letter_queue_size, ", batch size ", n.BATCH_SIZE, ", batch timeout ", n.BATCH_TIMEOUT );
+    ngx.log( ngx.DEBUG, "NETACEA INGEST - initialized with queue size ", n.queue_size,
+      ", dead letter queue size ", n.dead_letter_queue_size,
+      ", batch size ", n.BATCH_SIZE, ", batch timeout ", n.BATCH_TIMEOUT );
     return n
 end
 -- Data queue for batch processing
@@ -97,22 +99,24 @@ function Ingest:start_timers()
   batch_processor = function( premature )
 
     if premature then return end
-    
+
     local execution_thread = ngx.thread.spawn( function()
       local batch = {}
       local last_send_time = ngx.now()
 
       while true do
         -- Check if worker is exiting
-        if ngx.worker.exiting() == true then 
+        if ngx.worker.exiting() == true then
           -- Send any remaining data before exiting
           if #batch > 0 then
             self:send_batch_to_kinesis(batch)
           end
-          return 
+          return
         end
 
-        -- ngx.log( ngx.DEBUG, "NETACEA BATCH - checking for data to batch, current queue size: ", self.data_queue:count(), ", dead letter queue size: ", self.dead_letter_queue:count() );
+        -- ngx.log( ngx.DEBUG, "NETACEA BATCH - checking for data to batch,
+        --   current queue size: ", self.data_queue:count(),
+        --   ", dead letter queue size: ", self.dead_letter_queue:count() );
 
         local current_time = ngx.now()
         local should_send_batch = false
@@ -180,7 +184,7 @@ end
 
 function Ingest:send_batch_to_kinesis(batch)
   if not batch or #batch == 0 then return end
-  
+
   local client = Kinesis.new(
       self.stream_name,
       self.region,
@@ -209,7 +213,8 @@ function Ingest:send_batch_to_kinesis(batch)
       end
     end
   else
-    ngx.log( ngx.DEBUG, "NETACEA BATCH - successfully sent batch to Kinesis, response status: ", res.status .. ", body: " .. (res.body or '') );
+    ngx.log( ngx.DEBUG, "NETACEA BATCH - successfully sent batch to Kinesis, response status: ",
+      res.status .. ", body: " .. (res.body or '') );
   end
 
 end

@@ -43,3 +43,9 @@ luac.out
 *.bak
 
 tags
+
+# luacov reports
+luacov.report
+luacov.report.*
+luacov.stats.out
+luacov.stats.out.*

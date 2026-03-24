@@ -1,0 +1,6 @@
+return {
+    ["reporter"] = "html",
+    ["reportfile"] = "luacov.report.html",
+    ["include"] = {"./src/" },
+    runreport = true
+}
