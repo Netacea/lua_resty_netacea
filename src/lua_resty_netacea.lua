@@ -5,6 +5,7 @@ local netacea_cookies = require('lua_resty_netacea_cookies_v3')
 local utils = require("netacea_utils")
 local protector_client = require("lua_resty_netacea_protector_client")
 local Constants = require("lua_resty_netacea_constants")
+local mitigation = require("lua_resty_netacea_mitigation")
 
 local _N = {}
 _N._VERSION = '0.2.2'
@@ -12,36 +13,6 @@ _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'
 local cjson = require 'cjson'
-
-local function serveCaptcha(captchaBody)
-  ngx.status = ngx.HTTP_FORBIDDEN
-  ngx.header["content-type"] = "text/html"
-  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
-  ngx.print(captchaBody)
-  return ngx.exit(ngx.HTTP_OK)
-end
-
-local function serveBlock()
-  ngx.status = ngx.HTTP_FORBIDDEN;
-  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
-  ngx.print("403 Forbidden");
-  return ngx.exit(ngx.HTTP_FORBIDDEN);
-end
-
-local function serveMonetisationRedirect(location)
-  ngx.status = 303;
-  ngx.header["Location"] = location
-  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
-  ngx.print("303 See Other");
-  return ngx.exit(303);
-end
-
-local function serveMonetisationFallback()
-  ngx.status = 402;
-  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
-  ngx.print("402 See Other");
-  return ngx.exit(402);
-end
 
 function _N:new(options)
   local n = {}
@@ -126,32 +97,6 @@ function _N:new(options)
   end
 
   return n
-end
-
-function _N:getBestMitigation(protector_result)
-  if not protector_result then return nil end
-
-  local mitigate = protector_result.mitigate
-  local captcha = protector_result.captcha
-
-  if (mitigate == Constants.mitigationTypes.NONE) then return nil end
-  if (not Constants.mitigationTypesText[mitigate]) then return nil end
-
-  if (mitigate == Constants.mitigationTypes.ALLOW) then return nil end
-  if (captcha == Constants.captchaStates.PASS) then return nil end
-  if (captcha == Constants.captchaStates.COOKIEPASS) then return nil end
-
-  if (mitigate == Constants.mitigationTypes.BLOCKED
-      and (captcha == Constants.captchaStates.SERVE
-        or captcha == Constants['captchaStates'].COOKIEFAIL)) then
-    return 'captcha'
-  end
-
-  if (mitigate == Constants.mitigationTypes.MONETISED) then
-    return 'monetise'
-  end
-
-  return 'block'
 end
 
 function _N:setBcType(match, mitigate, captcha)
@@ -264,35 +209,40 @@ function _N:mitigate()
 
     ngx.log(ngx.DEBUG, "NETACEA MITIGATE - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
 
-    local best_mitigation = self:getBestMitigation(protector_result)
+    local best_mitigation = mitigation.getBestMitigation(protector_result)
+
     if best_mitigation == 'captcha' then
       ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving captcha")
       local captchaBody = protector_result.response.body
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      serveCaptcha(captchaBody)
+      mitigation.serveCaptcha(captchaBody)
       return
-    elseif best_mitigation == 'block' then
+    end
+
+    if best_mitigation == 'block' then
       ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving block")
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      serveBlock()
+      mitigation.serveBlock()
       return
-    elseif best_mitigation == 'monetise' then
+    end
+
+    if best_mitigation == 'monetise' then
       ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving monetise")
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
       if protector_result.redirectHost then
         local redirect_location = "https://" .. protector_result.redirectHost .. ngx.var.request_uri
-        serveMonetisationRedirect(redirect_location)
+        mitigation.serveMonetisationRedirect(redirect_location)
       else
-        serveMonetisationFallback()
+        mitigation.serveMonetisationFallback()
       end
       return
-    else
-      ngx.log(ngx.DEBUG, "NETACEA MITIGATE - no mitigation applied")
-      self:refreshSession(parsed_cookie.reason)
     end
+
+    ngx.log(ngx.DEBUG, "NETACEA MITIGATE - no mitigation applied")
+    self:refreshSession(parsed_cookie.reason)
   else
     ngx.log(ngx.DEBUG, "NETACEA MITIGATE - valid cookie found, skipping mitigation")
     ngx.ctx.NetaceaState.protector_result = {
