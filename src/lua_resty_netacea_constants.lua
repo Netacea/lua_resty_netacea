@@ -20,7 +20,9 @@ Constants['mitigationTypes'] = {
   NONE = '0',
   BLOCKED = '1',
   ALLOW = '2',
-  HARDBLOCKED = '3'
+  HARDBLOCKED = '3',
+  FLAGGED = '4',
+  MONETISED = '5'
 }
 
 Constants['captchaStatesText'] = {}

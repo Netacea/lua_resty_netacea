@@ -28,6 +28,21 @@ local function serveBlock()
   return ngx.exit(ngx.HTTP_FORBIDDEN);
 end
 
+local function serveMonetisationRedirect(location)
+  ngx.status = 303;
+  ngx.header["Location"] = location
+  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
+  ngx.print("303 See Other");
+  return ngx.exit(303);
+end
+
+local function serveMonetisationFallback()
+  ngx.status = 402;
+  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
+  ngx.print("402 See Other");
+  return ngx.exit(402);
+end
+
 function _N:new(options)
   local n = {}
   setmetatable(n, self)
@@ -130,6 +145,10 @@ function _N:getBestMitigation(protector_result)
       and (captcha == Constants.captchaStates.SERVE
         or captcha == Constants['captchaStates'].COOKIEFAIL)) then
     return 'captcha'
+  end
+
+  if (mitigate == Constants.mitigationTypes.MONETISED) then
+    return 'monetise'
   end
 
   return 'block'
@@ -258,6 +277,17 @@ function _N:mitigate()
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
       serveBlock()
+      return
+    elseif best_mitigation == 'monetise' then
+      ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving monetise")
+      ngx.ctx.NetaceaState.grace_period = -1000
+      self:refreshSession(parsed_cookie.reason)
+      if protector_result.redirectHost then
+        local redirect_location = "https://" .. protector_result.redirectHost .. ngx.var.request_uri
+        serveMonetisationRedirect(redirect_location)
+      else
+        serveMonetisationFallback()
+      end
       return
     else
       ngx.log(ngx.DEBUG, "NETACEA MITIGATE - no mitigation applied")
