@@ -71,7 +71,8 @@ function ProtectorClient:checkReputation()
         },
         match = res['headers']['x-netacea-match'] or constants['idTypes'].NONE,
         mitigate = res['headers']['x-netacea-mitigate'] or constants['mitigationTypes'].NONE,
-        captcha = res['headers']['x-netacea-captcha'] or constants['captchaStates'].NONE
+        captcha = res['headers']['x-netacea-captcha'] or constants['captchaStates'].NONE,
+        redirectHost = res['headers']['x-netacea-redirect-host'] or nil
     }
     return result
 end

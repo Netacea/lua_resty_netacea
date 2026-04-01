@@ -20,7 +20,9 @@ Constants['mitigationTypes'] = {
   NONE = '0',
   BLOCKED = '1',
   ALLOW = '2',
-  HARDBLOCKED = '3'
+  HARDBLOCKED = '3',
+  FLAGGED = '4',
+  MONETISED = '5'
 }
 
 Constants['captchaStatesText'] = {}
@@ -43,7 +45,6 @@ Constants['issueReasons'] = {
     CAPTCHA_GET = 'captcha_get',
 }
 
-
 Constants['matchBcTypes'] = {
   ['1'] = 'ua',
   ['2'] = 'ip',
@@ -61,7 +62,8 @@ Constants['mitigateBcTypes'] = {
   ['1'] = 'blocked',
   ['2'] = 'allow',
   ['3'] = 'hardblocked',
-  ['4'] = 'block'
+  ['4'] = 'flagged',
+  ['5'] = 'monetised'
 }
 
 Constants['captchaBcTypes'] = {
