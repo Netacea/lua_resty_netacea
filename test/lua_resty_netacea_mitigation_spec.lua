@@ -116,9 +116,9 @@ describe("lua_resty_netacea_mitigation", function()
             assert.are.equal("max-age=0, no-cache, no-store, must-revalidate", ngx_mock.header["Cache-Control"])
         end)
 
-        it("should print 402 See Other", function()
+        it("should print 402 Payment Required", function()
             mitigation.serveMonetisationFallback()
-            assert.spy(ngx_mock.print).was.called_with("402 See Other")
+            assert.spy(ngx_mock.print).was.called_with("402 Payment Required")
         end)
 
         it("should exit with 402", function()

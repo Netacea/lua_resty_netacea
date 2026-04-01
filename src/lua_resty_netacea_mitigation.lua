@@ -55,7 +55,7 @@ end
 function _M.serveMonetisationFallback()
   ngx.status = 402;
   ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
-  ngx.print("402 See Other");
+  ngx.print("402 Payment Required");
   return ngx.exit(402);
 end
 
