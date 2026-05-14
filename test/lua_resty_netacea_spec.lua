@@ -8,10 +8,19 @@ insulate("lua_resty_netacea", function()
         local Netacea
         local ngx_mock
         local ingest_instance
+        local cookies_mock
+        local protector_client_mock
+        local protector_client_instance
 
         before_each(function()
             ngx_mock = {
                 ctx = {},
+                var = {
+                    remote_addr = "127.0.0.1",
+                    http_user_agent = "Test-Agent",
+                    cookie__mitata = ""
+                },
+                header = {},
                 log = spy.new(function() end),
                 DEBUG = 7,
                 ERR = 3
@@ -29,16 +38,46 @@ insulate("lua_resty_netacea", function()
             package.loaded['lua_resty_netacea_ingest'] = {
                 new = spy.new(function() return ingest_instance end)
             }
-            package.loaded['lua_resty_netacea_cookies_v3'] = {}
+            cookies_mock = {
+                parseMitataCookie = spy.new(function()
+                    return {
+                        valid = false,
+                        reason = "no_session"
+                    }
+                end),
+                generateNewCookieValue = spy.new(function()
+                    return {
+                        mitata_jwe = "new-session-cookie",
+                        mitata_plaintext = "plaintext"
+                    }
+                end),
+                newUserId = spy.new(function() return "new-user-id" end),
+                decrypt = spy.new(function() return nil end),
+                encrypt = spy.new(function() return "encrypted" end)
+            }
+            package.loaded['lua_resty_netacea_cookies_v3'] = cookies_mock
             package.loaded['netacea_utils'] = {
                 parseOption = function(value, default)
                     if value == nil then return default end
                     return value
+                end,
+                getIpAddress = function()
+                    return "127.0.0.1"
                 end
             }
-            package.loaded['lua_resty_netacea_protector_client'] = {
-                new = spy.new(function() return {} end)
+            protector_client_instance = {
+                checkReputation = spy.new(function()
+                    return {
+                        match = "0",
+                        mitigate = "0",
+                        captcha = "0"
+                    }
+                end)
             }
+            protector_client_mock = {
+                new = spy.new(function() return protector_client_instance end)
+            }
+            package.loaded['lua_resty_netacea_protector_client'] = protector_client_mock
             package.loaded['lua_resty_netacea_mitigation'] = {}
             package.loaded['cjson'] = {
                 encode = function() return "{}" end
@@ -113,6 +152,46 @@ insulate("lua_resty_netacea", function()
 
                 assert.are.equal("ip_blocked", ngx_mock.ctx.NetaceaState.bc_type)
                 assert.spy(ingest_instance.ingest).was.called(1)
+            end)
+        end)
+
+        describe("session cookie in ingest-only mode", function()
+            it("should set a session cookie when mitigation is disabled", function()
+                local netacea = new_ingest_enabled_netacea()
+
+                netacea:mitigate()
+
+                assert.are.same({
+                    "_mitata=new-session-cookie;Max-Age=86400; Path=/;"
+                }, ngx_mock.header["Set-Cookie"])
+                assert.are.equal("new-session-cookie", ngx_mock.ctx.mitata)
+                assert.are.equal("new-user-id", ngx_mock.ctx.NetaceaState.UserId)
+                assert.spy(cookies_mock.generateNewCookieValue).was.called(1)
+                assert.spy(protector_client_instance.checkReputation).was_not_called()
+            end)
+
+            it("should not refresh a valid session cookie when mitigation is disabled", function()
+                cookies_mock.parseMitataCookie = spy.new(function()
+                    return {
+                        valid = true,
+                        user_id = "existing-user-id",
+                        data = {
+                            mat = "0",
+                            mit = "0",
+                            cap = "0"
+                        }
+                    }
+                end)
+                ngx_mock.var.cookie__mitata = "existing-session-cookie"
+                local netacea = new_ingest_enabled_netacea()
+
+                netacea:mitigate()
+
+                assert.is_nil(ngx_mock.header["Set-Cookie"])
+                assert.are.equal("existing-session-cookie", ngx_mock.ctx.mitata)
+                assert.are.equal("existing-user-id", ngx_mock.ctx.NetaceaState.UserId)
+                assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
+                assert.spy(protector_client_instance.checkReputation).was_not_called()
             end)
         end)
     end)

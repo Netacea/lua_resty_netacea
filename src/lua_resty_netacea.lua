@@ -57,6 +57,7 @@ function _N:new(options)
   end
   -- mitigate:required:secretKey
   n.secretKey = b64.decode_base64url(options.secretKey) or ''
+  n.sessionEnabled = n.secretKey and n.secretKey ~= ''
   if not n.secretKey or n.secretKey == '' then
     n.mitigationEnabled = false
   end
@@ -137,6 +138,7 @@ function _N:handleSession()
 
   -- Check cookie
   local cookie = ngx.var['cookie_' .. self.cookieName] or ''
+  ngx.ctx.mitata = cookie
   local parsed_cookie = netacea_cookies.parseMitataCookie(cookie, self.secretKey)
   ngx.log(ngx.DEBUG, "NETACEA MITIGATE - parsed cookie: ", cjson.encode(parsed_cookie))
   if parsed_cookie.user_id then
@@ -153,7 +155,11 @@ function _N:handleSession()
 end
 
 function _N:refreshSession(reason)
-  local protector_result = ngx.ctx.NetaceaState.protector_result
+  local protector_result = ngx.ctx.NetaceaState.protector_result or {
+    match = Constants['idTypes'].NONE,
+    mitigate = Constants['mitigationTypes'].NONE,
+    captcha = Constants['captchaStates'].NONE
+  }
 
   local grace_period = ngx.ctx.NetaceaState.grace_period or 60
 
@@ -173,6 +179,7 @@ function _N:refreshSession(reason)
     local cookies = {
       self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';' .. self.cookieAttributes
     }
+    ngx.ctx.mitata = new_cookie.mitata_jwe
 
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
       local captcha_cookie_encrypted = netacea_cookies.encrypt(self.secretKey, protector_result.captcha_cookie)
@@ -198,8 +205,33 @@ function _N:handleCaptcha()
 end
 
 
+function _N:refreshIngestSession()
+  local parsed_cookie = self:handleSession()
+
+  if parsed_cookie.valid then
+    ngx.ctx.NetaceaState.protector_result = {
+      match = parsed_cookie.data.mat,
+      mitigate = parsed_cookie.data.mit,
+      captcha = parsed_cookie.data.cap
+    }
+    return parsed_cookie
+  end
+
+  if not ngx.ctx.NetaceaState.UserId then
+    ngx.ctx.NetaceaState.UserId = netacea_cookies.newUserId()
+  end
+
+  self:refreshSession(parsed_cookie.reason)
+  return parsed_cookie
+end
+
 function _N:mitigate()
-  if not self.mitigationEnabled then return nil end
+  if not self.mitigationEnabled then
+    if self.sessionEnabled then
+      return self:refreshIngestSession()
+    end
+    return nil
+  end
   local parsed_cookie = self:handleSession()
 
   if not parsed_cookie.valid then
