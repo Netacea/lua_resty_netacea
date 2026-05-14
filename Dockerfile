@@ -9,9 +9,9 @@ RUN apt-get install -y libssl-dev
 
 
 FROM base AS build
-COPY ./lua_resty_netacea-1.0-0.rockspec ./
+COPY ./lua_resty_netacea-1.2.0-0.rockspec ./
 COPY ./src ./src
-RUN /usr/local/openresty/luajit/bin/luarocks make ./lua_resty_netacea-1.0-0.rockspec
+RUN /usr/local/openresty/luajit/bin/luarocks make ./lua_resty_netacea-1.2.0-0.rockspec
 
 FROM build AS test
 

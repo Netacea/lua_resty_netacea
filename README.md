@@ -45,6 +45,60 @@ With coverage report (sent to stdout) `docker compose run -e LUACOV_REPORT=1 --b
 
 ## Configuration
 
+### nginx.conf - ingest only
+
+Use ingest-only mode when you want to send request data to the ingest pipeline without calling the Mitigation Endpoint.
+
+Set `ingestEnabled` to `true`, set `mitigationEnabled` to `false`, and leave `mitigationType` empty.
+
+`kinesisProperties` must be provided for ingest to remain enabled.
+
+```conf
+worker_processes 1;
+
+events {
+  worker_connections 1024;
+}
+
+http {
+  lua_package_path "/usr/local/share/lua/5.1/?.lua;;";
+  lua_max_running_timers  2048;
+  lua_max_pending_timers  4096;
+  lua_socket_pool_size    1024;
+  lua_need_request_body on;
+  resolver 8.8.8.8 ipv6=off;
+  lua_ssl_verify_depth 2;
+  lua_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+  init_worker_by_lua_block {
+    netacea = (require 'lua_resty_netacea'):new({
+      apiKey             = 'your-api-key',
+      realIpHeader       = 'realip-header',
+      ingestEnabled      = true,
+      mitigationEnabled  = false,
+      mitigationType     = '',
+      kinesisProperties  = {
+        stream_name      = 'your-kinesis-stream',
+        region           = 'eu-west-1',
+        aws_access_key   = 'your-aws-access-key',
+        aws_secret_key   = 'your-aws-secret-key'
+      }
+    })
+  }
+  log_by_lua_block {
+    netacea:ingest()
+  }
+
+  server {
+    listen 80;
+    server_name localhost;
+    location / {
+      default_type text/html;
+      content_by_lua 'ngx.say("<p>hello, world</p>")';
+    }
+  }
+}
+```
+
 ### nginx.conf - mitigate
 
 ```conf

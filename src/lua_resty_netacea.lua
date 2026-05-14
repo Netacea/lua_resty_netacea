@@ -8,7 +8,7 @@ local Constants = require("lua_resty_netacea_constants")
 local mitigation = require("lua_resty_netacea_mitigation")
 
 local _N = {}
-_N._VERSION = '1.1.0'
+_N._VERSION = '1.2.0'
 _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'
@@ -118,11 +118,15 @@ end
 function _N:ingest()
   ngx.log(ngx.DEBUG, "NETACEA INGEST - in netacea:ingest(): ", self.ingestEnabled)
   if not self.ingestEnabled then return nil end
-  ngx.ctx.NetaceaState.bc_type = self:setBcType(
-    tostring(ngx.ctx.NetaceaState.protector_result.match or Constants['idTypes'].NONE),
-    tostring(ngx.ctx.NetaceaState.protector_result.mitigate or Constants['mitigationTypes'].NONE),
-    tostring(ngx.ctx.NetaceaState.protector_result.captcha or Constants['captchaStates'].NONE)
-  )
+  local NetaceaState = ngx.ctx.NetaceaState
+  local protector_result = NetaceaState and NetaceaState.protector_result
+  if protector_result then
+    NetaceaState.bc_type = self:setBcType(
+      tostring(protector_result.match or Constants['idTypes'].NONE),
+      tostring(protector_result.mitigate or Constants['mitigationTypes'].NONE),
+      tostring(protector_result.captcha or Constants['captchaStates'].NONE)
+    )
+  end
   return self.ingestPipeline:ingest()
 end
 
