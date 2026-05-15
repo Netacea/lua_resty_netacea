@@ -9,7 +9,7 @@ NetaceaCookies.__index = NetaceaCookies
 
 function NetaceaCookies.decrypt(secretKey, value)
     local decoded = jwt:verify(secretKey, value)
-    if not decoded.verified then
+    if not decoded or not decoded.verified then
         return nil
     end
     return decoded.payload
@@ -82,6 +82,13 @@ function NetaceaCookies.parseMitataCookie(cookie, secretKey)
     end
 
     local decoded_str = NetaceaCookies.decrypt(secretKey, cookie)
+    if not decoded_str then
+        return {
+            valid = false,
+            reason = constants['issueReasons'].INVALID_SESSION
+        }
+    end
+
     local decoded = ngx.decode_args(decoded_str)
     if not decoded then
         return {
