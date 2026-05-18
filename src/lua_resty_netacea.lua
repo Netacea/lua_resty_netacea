@@ -55,10 +55,13 @@ function _N:new(options)
   if not n.mitigationType or (n.mitigationType ~= 'MITIGATE' and n.mitigationType ~= 'INJECT') then
     n.mitigationEnabled = false
   end
-  -- mitigate:required:secretKey
-  n.secretKey = b64.decode_base64url(options.secretKey) or ''
-  n.sessionEnabled = n.secretKey and n.secretKey ~= ''
-  if not n.secretKey or n.secretKey == '' then
+  -- mitigate:required:cookieEncryptionKey
+  -- secretKey is kept as a backwards-compatible alias.
+  local encodedCookieEncryptionKey = options.cookieEncryptionKey or options.secretKey
+  n.cookieEncryptionKey = b64.decode_base64url(encodedCookieEncryptionKey) or ''
+  n.secretKey = n.cookieEncryptionKey
+  n.sessionEnabled = n.cookieEncryptionKey and n.cookieEncryptionKey ~= ''
+  if not n.cookieEncryptionKey or n.cookieEncryptionKey == '' then
     n.mitigationEnabled = false
   end
   -- global:optional:cookieName
@@ -139,7 +142,7 @@ function _N:handleSession()
   -- Check cookie
   local cookie = ngx.var['cookie_' .. self.cookieName] or ''
   ngx.ctx.mitata = cookie
-  local parsed_cookie = netacea_cookies.parseMitataCookie(cookie, self.secretKey)
+  local parsed_cookie = netacea_cookies.parseMitataCookie(cookie, self.cookieEncryptionKey)
   ngx.log(ngx.DEBUG, "NETACEA MITIGATE - parsed cookie: ", cjson.encode(parsed_cookie))
   if parsed_cookie.user_id then
     ngx.ctx.NetaceaState.UserId = parsed_cookie.user_id
@@ -147,7 +150,7 @@ function _N:handleSession()
 
   -- Get captcha cookie
   local captcha_cookie_raw = ngx.var['cookie_' .. self.captchaCookieName] or ''
-  local captcha_cookie = netacea_cookies.decrypt(self.secretKey, captcha_cookie_raw)
+  local captcha_cookie = netacea_cookies.decrypt(self.cookieEncryptionKey, captcha_cookie_raw)
   if captcha_cookie and captcha_cookie ~= '' then
     ngx.ctx.NetaceaState.captcha_cookie = captcha_cookie
   end
@@ -164,7 +167,7 @@ function _N:refreshSession(reason)
   local grace_period = ngx.ctx.NetaceaState.grace_period or 60
 
   local new_cookie = netacea_cookies.generateNewCookieValue(
-      self.secretKey,
+      self.cookieEncryptionKey,
       ngx.ctx.NetaceaState.client,
       ngx.ctx.NetaceaState.UserId,
       netacea_cookies.newUserId(),
@@ -182,7 +185,10 @@ function _N:refreshSession(reason)
     ngx.ctx.mitata = new_cookie.mitata_jwe
 
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
-      local captcha_cookie_encrypted = netacea_cookies.encrypt(self.secretKey, protector_result.captcha_cookie)
+      local captcha_cookie_encrypted = netacea_cookies.encrypt(
+        self.cookieEncryptionKey,
+        protector_result.captcha_cookie
+      )
       table.insert(cookies,
         self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';'.. self.captchaCookieAttributes)
     end

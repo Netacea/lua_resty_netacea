@@ -7,16 +7,16 @@ local NetaceaCookies = {}
 NetaceaCookies.__index = NetaceaCookies
 
 
-function NetaceaCookies.decrypt(secretKey, value)
-    local decoded = jwt:verify(secretKey, value)
+function NetaceaCookies.decrypt(cookieEncryptionKey, value)
+    local decoded = jwt:verify(cookieEncryptionKey, value)
     if not decoded or not decoded.verified then
         return nil
     end
     return decoded.payload
 end
 
-function NetaceaCookies.encrypt(secretKey, payload)
-    local encoded = jwt:sign(secretKey, {
+function NetaceaCookies.encrypt(cookieEncryptionKey, payload)
+    local encoded = jwt:sign(cookieEncryptionKey, {
         header={ typ="JWE", alg="dir", enc="A128CBC-HS256" },
         payload = payload
     })
@@ -49,7 +49,7 @@ end
 
 
 function NetaceaCookies.generateNewCookieValue(
-    secretKey, client, user_id, cookie_id, issue_reason,
+    cookieEncryptionKey, client, user_id, cookie_id, issue_reason,
     issue_timestamp, grace_period, match, mitigation, captcha, settings)
     settings = settings or {}
     local plaintext = ngx.encode_args({
@@ -65,7 +65,7 @@ function NetaceaCookies.generateNewCookieValue(
         fCAPR = settings.fCAPR or 0
     })
 
-    local encoded = NetaceaCookies.encrypt(secretKey, plaintext)
+    local encoded = NetaceaCookies.encrypt(cookieEncryptionKey, plaintext)
 
     return {
         mitata_jwe = encoded,
@@ -73,7 +73,7 @@ function NetaceaCookies.generateNewCookieValue(
     }
 end
 
-function NetaceaCookies.parseMitataCookie(cookie, secretKey)
+function NetaceaCookies.parseMitataCookie(cookie, cookieEncryptionKey)
     if not cookie or cookie == '' then
         return {
             valid = false,
@@ -81,7 +81,7 @@ function NetaceaCookies.parseMitataCookie(cookie, secretKey)
         }
     end
 
-    local decoded_str = NetaceaCookies.decrypt(secretKey, cookie)
+    local decoded_str = NetaceaCookies.decrypt(cookieEncryptionKey, cookie)
     if not decoded_str then
         return {
             valid = false,

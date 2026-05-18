@@ -11,6 +11,7 @@ insulate("lua_resty_netacea", function()
         local cookies_mock
         local protector_client_mock
         local protector_client_instance
+        local decode_base64url_mock
 
         before_each(function()
             ngx_mock = {
@@ -32,8 +33,13 @@ insulate("lua_resty_netacea", function()
             }
 
             package.loaded['ngx'] = ngx_mock
+            decode_base64url_mock = spy.new(function(value)
+                if value == nil or value == "" then return nil end
+                if value == "invalid-cookie-encryption-key" then return nil end
+                return "decoded-" .. value
+            end)
             package.loaded['ngx.base64'] = {
-                decode_base64url = spy.new(function() return "decoded-secret" end)
+                decode_base64url = decode_base64url_mock
             }
             package.loaded['lua_resty_netacea_ingest'] = {
                 new = spy.new(function() return ingest_instance end)
@@ -107,7 +113,8 @@ insulate("lua_resty_netacea", function()
                 mitigationType = options.mitigationType or '',
                 mitigationEndpoint = options.mitigationEndpoint or '',
                 apiKey = "test-api-key",
-                secretKey = "test-secret-key",
+                cookieEncryptionKey = options.cookieEncryptionKey,
+                secretKey = options.secretKey or "test-secret-key",
                 kinesisProperties = {
                     stream_name = "test-stream",
                     region = "eu-west-1",
@@ -116,6 +123,74 @@ insulate("lua_resty_netacea", function()
                 }
             })
         end
+
+        describe("cookie encryption key config", function()
+            it("should prefer cookieEncryptionKey as the internal key name", function()
+                local netacea = new_ingest_enabled_netacea({
+                    cookieEncryptionKey = "test-cookie-encryption-key"
+                })
+
+                assert.are.equal("decoded-test-cookie-encryption-key", netacea.cookieEncryptionKey)
+                assert.are.equal("decoded-test-cookie-encryption-key", netacea.secretKey)
+                assert.spy(decode_base64url_mock).was.called_with("test-cookie-encryption-key")
+            end)
+
+            it("should keep secretKey as a backwards-compatible alias", function()
+                local netacea = new_ingest_enabled_netacea({
+                    secretKey = "test-secret-key"
+                })
+
+                assert.are.equal("decoded-test-secret-key", netacea.cookieEncryptionKey)
+                assert.are.equal("decoded-test-secret-key", netacea.secretKey)
+                assert.spy(decode_base64url_mock).was.called_with("test-secret-key")
+            end)
+
+            it("should ignore secretKey when cookieEncryptionKey is also configured", function()
+                local netacea = new_ingest_enabled_netacea({
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    secretKey = "ignored-secret-key"
+                })
+
+                assert.are.equal("decoded-test-cookie-encryption-key", netacea.cookieEncryptionKey)
+                assert.are.equal("decoded-test-cookie-encryption-key", netacea.secretKey)
+                assert.spy(decode_base64url_mock).was.called(1)
+                assert.spy(decode_base64url_mock).was.called_with("test-cookie-encryption-key")
+            end)
+
+            it("should disable sessions and mitigation when the configured key cannot be decoded", function()
+                local netacea = new_ingest_enabled_netacea({
+                    cookieEncryptionKey = "invalid-cookie-encryption-key",
+                    mitigationEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example"
+                })
+
+                assert.are.equal("", netacea.cookieEncryptionKey)
+                assert.are.equal("", netacea.secretKey)
+                assert.is_false(netacea.sessionEnabled)
+                assert.is_false(netacea.mitigationEnabled)
+                assert.spy(decode_base64url_mock).was.called(1)
+                assert.spy(decode_base64url_mock).was.called_with("invalid-cookie-encryption-key")
+                assert.spy(protector_client_mock.new).was_not_called()
+            end)
+
+            it("should use cookieEncryptionKey for session cookie operations", function()
+                local netacea = new_ingest_enabled_netacea({
+                    cookieEncryptionKey = "test-cookie-encryption-key"
+                })
+
+                netacea:mitigate()
+
+                assert.spy(cookies_mock.parseMitataCookie).was.called_with(
+                    "",
+                    "decoded-test-cookie-encryption-key"
+                )
+                assert.spy(cookies_mock.decrypt).was.called_with(
+                    "decoded-test-cookie-encryption-key",
+                    ""
+                )
+            end)
+        end)
 
         describe("ingest", function()
             it("should support ingest-only mode when NetaceaState is missing", function()
