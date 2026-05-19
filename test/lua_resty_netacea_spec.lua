@@ -29,6 +29,7 @@ insulate("lua_resty_netacea", function()
                     get_body_data = spy.new(function() return "captcha-response" end)
                 },
                 DEBUG = 7,
+                WARN = 4,
                 ERR = 3
             }
 
@@ -121,9 +122,8 @@ insulate("lua_resty_netacea", function()
 
         local function new_ingest_enabled_netacea(options)
             options = options or {}
-            return Netacea:new({
+            local config = {
                 ingestEnabled = true,
-                mitigationEnabled = options.mitigationEnabled or false,
                 mitigationType = options.mitigationType or '',
                 mitigationEndpoint = options.mitigationEndpoint or '',
                 apiKey = "test-api-key",
@@ -135,8 +135,102 @@ insulate("lua_resty_netacea", function()
                     aws_access_key = "test-access-key",
                     aws_secret_key = "test-secret-key"
                 }
-            })
+            }
+            if options.mitigationEnabled ~= nil then
+                config.mitigationEnabled = options.mitigationEnabled
+            end
+            return Netacea:new(config)
         end
+
+        describe("startup logging", function()
+            it("should log ingest mode when only ingest is enabled", function()
+                new_ingest_enabled_netacea()
+
+                assert.spy(ngx_mock.log).was.called_with(
+                    ngx_mock.DEBUG,
+                    "NETACEA CONFIG - integration mode: ",
+                    "INGEST"
+                )
+            end)
+
+            it("should log mitigation mode when mitigation is enabled", function()
+                new_ingest_enabled_netacea({
+                    mitigationEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    cookieEncryptionKey = "test-cookie-encryption-key"
+                })
+
+                assert.spy(ngx_mock.log).was.called_with(
+                    ngx_mock.DEBUG,
+                    "NETACEA CONFIG - integration mode: ",
+                    "MITIGATE"
+                )
+            end)
+
+            it("should log disabled mode when no integration paths are enabled", function()
+                Netacea:new({
+                    ingestEnabled = false,
+                    mitigationEnabled = false,
+                    mitigationEndpoint = "",
+                    mitigationType = "",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key"
+                })
+
+                assert.spy(ngx_mock.log).was.called_with(
+                    ngx_mock.DEBUG,
+                    "NETACEA CONFIG - integration mode: ",
+                    "DISABLED"
+                )
+            end)
+        end)
+
+        describe("protection mode config", function()
+            it("should disable mitigation when mitigationType is INGEST", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "INGEST",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal("INGEST", netacea.mitigationType)
+                assert.is_false(netacea.mitigationEnabled)
+                assert.spy(protector_client_mock.new).was_not_called()
+            end)
+
+            it("should treat mitigationEnabled false as deprecated ingest mode", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal("INGEST", netacea.mitigationType)
+                assert.is_false(netacea.mitigationEnabled)
+                assert.spy(ngx_mock.log).was.called_with(
+                    ngx_mock.WARN,
+                    "NETACEA CONFIG - mitigationEnabled is deprecated; set mitigationType to INGEST instead"
+                )
+            end)
+        end)
 
         describe("cookie encryption key config", function()
             it("should pass realIpHeaderIndex to IP address lookup", function()

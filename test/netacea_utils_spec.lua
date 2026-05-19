@@ -412,6 +412,79 @@ describe("netacea_utils", function()
         end)
     end)
 
+    describe("env", function()
+        local original_getenv
+        local env_values
+
+        before_each(function()
+            original_getenv = os.getenv
+            env_values = {}
+            os.getenv = function(name)
+                return env_values[name]
+            end
+        end)
+
+        after_each(function()
+            os.getenv = original_getenv
+        end)
+
+        it("should return an environment variable when it is set", function()
+            env_values.NETACEA_TEST_VALUE = "configured-value"
+
+            local result = utils.env("NETACEA_TEST_VALUE", "default-value")
+
+            assert.is.equal("configured-value", result)
+        end)
+
+        it("should return the default value when an environment variable is not set", function()
+            local result = utils.env("NETACEA_TEST_VALUE", "default-value")
+
+            assert.is.equal("default-value", result)
+        end)
+    end)
+
+    describe("envEnabled", function()
+        local original_getenv
+        local env_values
+
+        before_each(function()
+            original_getenv = os.getenv
+            env_values = {}
+            os.getenv = function(name)
+                return env_values[name]
+            end
+        end)
+
+        after_each(function()
+            os.getenv = original_getenv
+        end)
+
+        it("should return the default value when an environment variable is not set", function()
+            local result = utils.envEnabled("NETACEA_INGEST_ENABLED", true)
+
+            assert.is_true(result)
+        end)
+
+        it("should return true when an environment variable is exactly true", function()
+            env_values.NETACEA_INGEST_ENABLED = "true"
+
+            local result = utils.envEnabled("NETACEA_INGEST_ENABLED", false)
+
+            assert.is_true(result)
+        end)
+
+        it("should return false when an environment variable is set to anything else", function()
+            env_values.NETACEA_INGEST_ENABLED = "True"
+            assert.is_false(utils.envEnabled("NETACEA_INGEST_ENABLED", true))
+
+            env_values.NETACEA_INGEST_ENABLED = "false"
+            assert.is_false(utils.envEnabled("NETACEA_INGEST_ENABLED", true))
+
+            env_values.NETACEA_INGEST_ENABLED = ""
+            assert.is_false(utils.envEnabled("NETACEA_INGEST_ENABLED", true))
+        end)
+    end)
+
     describe("buildRandomString edge cases", function()
         it("should handle negative length gracefully", function()
             -- The current implementation doesn't check for negative values

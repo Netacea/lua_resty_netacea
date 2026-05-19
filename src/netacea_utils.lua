@@ -66,5 +66,18 @@ function M.parseOption(option, defaultValue)
   return option
 end
 
+function M.env(name, defaultValue)
+  return os.getenv(name) or defaultValue
+end
+
+function M.envEnabled(name, defaultValue)
+  local value = os.getenv(name)
+  if value == nil then
+    return defaultValue
+  end
+
+  return value == 'true'
+end
+
 
 return M

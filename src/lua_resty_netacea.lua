@@ -14,6 +14,12 @@ _N._TYPE = 'nginx'
 local ngx = require 'ngx'
 local cjson = require 'cjson'
 
+local function getIntegrationMode(n)
+  if n.mitigationEnabled then return n.mitigationType end
+  if n.ingestEnabled then return 'INGEST' end
+  return 'DISABLED'
+end
+
 function _N:new(options)
   local n = {}
   setmetatable(n, self)
@@ -40,8 +46,14 @@ function _N:new(options)
       n.ingestEnabled = false
     end
   end
-  -- mitigate:optional:mitigationEnabled
-  n.mitigationEnabled = options.mitigationEnabled or false
+  -- mitigate:optional:mitigationType
+  n.mitigationType = utils.parseOption(options.mitigationType, 'INGEST')
+  -- mitigationEnabled is deprecated. Use mitigationType instead.
+  if options.mitigationEnabled == false then
+    n.mitigationType = 'INGEST'
+    ngx.log(ngx.WARN, "NETACEA CONFIG - mitigationEnabled is deprecated; set mitigationType to INGEST instead")
+  end
+  n.mitigationEnabled = n.mitigationType == 'MITIGATE' or n.mitigationType == 'INJECT'
   -- mitigate:required:mitigationEndpoint
   n.mitigationEndpoint = options.mitigationEndpoint
   if type(n.mitigationEndpoint) ~= 'table' then
@@ -50,9 +62,7 @@ function _N:new(options)
   if not n.mitigationEndpoint[1] or n.mitigationEndpoint[1] == '' then
     n.mitigationEnabled = false
   end
-  -- mitigate:required:mitigationType
-  n.mitigationType = utils.parseOption(options.mitigationType, '')
-  if not n.mitigationType or (n.mitigationType ~= 'MITIGATE' and n.mitigationType ~= 'INJECT') then
+  if n.mitigationType ~= 'INGEST' and n.mitigationType ~= 'MITIGATE' and n.mitigationType ~= 'INJECT' then
     n.mitigationEnabled = false
   end
   -- mitigate:required:cookieEncryptionKey
@@ -89,6 +99,7 @@ function _N:new(options)
   n._MODULE_TYPE = _N._TYPE
   n._MODULE_VERSION = _N._VERSION
 
+  ngx.log(ngx.DEBUG, "NETACEA CONFIG - integration mode: ", getIntegrationMode(n))
 
   if n.ingestEnabled then
     n.ingestPipeline = Ingest:new(options.kinesisProperties or {}, n)
