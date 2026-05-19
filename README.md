@@ -22,7 +22,7 @@ The docker compose file is used to mount local files to the right place in the i
 ### Run development version
 
 1. Update `./src/conf/nginx.conf` to include Netacea configuration and server configuration. Default is the NGINX instance will just return a static "Hello world" page. See "Configuration" below
-2. `docker compose up resty`
+2. `docker compose up --build resty`
 3. Access [](http://localhost:8080)
 
 ### Run tests
@@ -36,12 +36,12 @@ With coverage report (sent to stdout) `export LUACOV_REPORT=1 && ./run_lua_tests
 
 ##### Docker compose
 
-Without coverage report: `docker compose run --build test`
+Without coverage report: `docker compose run --rm --build test`
 With coverage report (sent to stdout) `docker compose run -e LUACOV_REPORT=1 --build test [> output.html]`
 
 #### Linter
 
-`docker compose run --build lint`
+`docker compose run --rm --build lint`
 
 ## Configuration
 
@@ -52,6 +52,9 @@ Use ingest-only mode when you want to send request data to the ingest pipeline w
 Set `ingestEnabled` to `true`, set `mitigationEnabled` to `false`, and leave `mitigationType` empty.
 
 `kinesisProperties` must be provided for ingest to remain enabled.
+
+When `realIpHeaderIndex` is set, `realIpHeader` is parsed as a comma-separated list and the indexed value is used. Indexing starts at `0`; negative indexes count from the end, so `-1` selects the last value.
+This is useful for, though not limited to, parsing `X-Forwarded-For` values.
 
 ```conf
 worker_processes 1;
@@ -172,6 +175,7 @@ http {
       apiKey             = 'your-api-key',
       cookieEncryptionKey = 'your-cookie-encryption-key',
       realIpHeader       = 'realip-header',
+      -- realIpHeaderIndex  = 0, -- Parses realIpHeader as a comma-separated list
       ingestEnabled      = true,
       mitigationEnabled  = true,
       mitigationType     = 'INJECT'

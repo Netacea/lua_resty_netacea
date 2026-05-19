@@ -67,9 +67,9 @@ insulate("lua_resty_netacea", function()
                     if value == nil then return default end
                     return value
                 end,
-                getIpAddress = function()
+                getIpAddress = spy.new(function()
                     return "127.0.0.1"
-                end
+                end)
             }
             protector_client_instance = {
                 checkReputation = spy.new(function()
@@ -125,6 +125,28 @@ insulate("lua_resty_netacea", function()
         end
 
         describe("cookie encryption key config", function()
+            it("should pass realIpHeaderIndex to IP address lookup", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationEnabled = false,
+                    mitigationEndpoint = "",
+                    mitigationType = "",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    realIpHeader = "x_forwarded_for",
+                    realIpHeaderIndex = -1
+                })
+
+                netacea:mitigate()
+
+                assert.spy(package.loaded['netacea_utils'].getIpAddress).was.called_with(
+                    package.loaded['netacea_utils'],
+                    ngx_mock.var,
+                    "x_forwarded_for",
+                    -1
+                )
+            end)
+
             it("should prefer cookieEncryptionKey as the internal key name", function()
                 local netacea = new_ingest_enabled_netacea({
                     cookieEncryptionKey = "test-cookie-encryption-key"

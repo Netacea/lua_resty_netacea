@@ -111,6 +111,56 @@ describe("netacea_utils", function()
             assert.is.equal("203.0.113.1", result)
         end)
 
+        it("should return the indexed header value when index is positive", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2, 203.0.113.3"
+            }
+
+            local result = utils:getIpAddress(vars, "x_forwarded_for", 1)
+            assert.is.equal("203.0.113.2", result)
+        end)
+
+        it("should return the indexed header value when index is zero", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2"
+            }
+
+            local result = utils:getIpAddress(vars, "x_forwarded_for", 0)
+            assert.is.equal("203.0.113.1", result)
+        end)
+
+        it("should return the indexed header value when index is negative", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2, 203.0.113.3"
+            }
+
+            local result = utils:getIpAddress(vars, "x_forwarded_for", -2)
+            assert.is.equal("203.0.113.2", result)
+        end)
+
+        it("should fall back to remote_addr when header index is out of range", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2"
+            }
+
+            local result = utils:getIpAddress(vars, "x_forwarded_for", -3)
+            assert.is.equal("192.168.1.1", result)
+        end)
+
+        it("should apply realIpHeaderIndex to non x-forwarded-for headers", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_custom_ip = "203.0.113.1, 203.0.113.2"
+            }
+
+            local result = utils:getIpAddress(vars, "x_custom_ip", 1)
+            assert.is.equal("203.0.113.2", result)
+        end)
+
         it("should return remote_addr when real IP header doesn't exist", function()
             local vars = {
                 remote_addr = "192.168.1.1"
@@ -173,6 +223,36 @@ describe("netacea_utils", function()
             
             local result = utils:getIpAddress(vars, "x_forwarded_for")
             assert.is.equal("203.0.113.1", result)
+        end)
+
+        it("should normalize realIpHeader dashes to nginx variable underscores", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1"
+            }
+
+            local result = utils:getIpAddress(vars, "x-forwarded-for")
+            assert.is.equal("203.0.113.1", result)
+        end)
+
+        it("should normalize realIpHeader case", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1"
+            }
+
+            local result = utils:getIpAddress(vars, "X-Forwarded-For")
+            assert.is.equal("203.0.113.1", result)
+        end)
+
+        it("should apply header index after normalizing the header name", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2"
+            }
+
+            local result = utils:getIpAddress(vars, "X-Forwarded-For", -1)
+            assert.is.equal("203.0.113.2", result)
         end)
 
         it("should handle missing remote_addr gracefully", function()

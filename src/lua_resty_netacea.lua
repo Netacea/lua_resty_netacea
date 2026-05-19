@@ -74,6 +74,8 @@ function _N:new(options)
   n.captchaCookieAttributes = utils.parseOption(options.captchaCookieAttributes, 'Max-Age=86400; Path=/;')
   -- global:optional:realIpHeader
   n.realIpHeader = utils.parseOption(options.realIpHeader, '')
+  -- global:optional:realIpHeaderIndex
+  n.realIpHeaderIndex = utils.parseOption(options.realIpHeaderIndex, nil)
   -- global:optional:userIdKey
   n.userIdKey = utils.parseOption(options.userIdKey, '')
   -- global:required:apiKey
@@ -136,7 +138,7 @@ end
 
 function _N:handleSession()
   ngx.ctx.NetaceaState = {}
-  ngx.ctx.NetaceaState.client = utils:getIpAddress(ngx.var, self.realIpHeader)
+  ngx.ctx.NetaceaState.client = utils:getIpAddress(ngx.var, self.realIpHeader, self.realIpHeaderIndex)
   ngx.ctx.NetaceaState.user_agent = ngx.var.http_user_agent or ''
 
   -- Check cookie
