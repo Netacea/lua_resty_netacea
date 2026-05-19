@@ -23,6 +23,11 @@ insulate("lua_resty_netacea", function()
                 },
                 header = {},
                 log = spy.new(function() end),
+                exit = spy.new(function() end),
+                req = {
+                    read_body = spy.new(function() end),
+                    get_body_data = spy.new(function() return "captcha-response" end)
+                },
                 DEBUG = 7,
                 ERR = 3
             }
@@ -77,6 +82,15 @@ insulate("lua_resty_netacea", function()
                         match = "0",
                         mitigate = "0",
                         captcha = "0"
+                    }
+                end),
+                validateCaptcha = spy.new(function()
+                    return {
+                        match = "0",
+                        mitigate = "0",
+                        captcha = "2",
+                        exit_status = 200,
+                        captcha_cookie = "captcha-cookie-value"
                     }
                 end)
             }
@@ -289,6 +303,56 @@ insulate("lua_resty_netacea", function()
                 assert.are.equal("existing-user-id", ngx_mock.ctx.NetaceaState.UserId)
                 assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
                 assert.spy(protector_client_instance.checkReputation).was_not_called()
+            end)
+        end)
+
+        describe("captcha handling", function()
+            local function new_mitigation_enabled_netacea()
+                return Netacea:new({
+                    ingestEnabled = false,
+                    mitigationEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key"
+                })
+            end
+
+            it("should not set session or captcha cookies when captcha fails", function()
+                protector_client_instance.validateCaptcha = spy.new(function()
+                    return {
+                        match = "0",
+                        mitigate = "0",
+                        captcha = "3",
+                        exit_status = 403,
+                        captcha_cookie = "failed-captcha-cookie"
+                    }
+                end)
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.is_nil(ngx_mock.header["Set-Cookie"])
+                assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
+                assert.spy(cookies_mock.encrypt).was_not_called()
+                assert.spy(ngx_mock.exit).was.called_with(403)
+            end)
+
+            it("should refresh session and captcha cookies when captcha passes", function()
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.are.same({
+                    "_mitata=new-session-cookie;Max-Age=86400; Path=/;",
+                    "_mitatacaptcha=encrypted;Max-Age=86400; Path=/;"
+                }, ngx_mock.header["Set-Cookie"])
+                assert.spy(cookies_mock.generateNewCookieValue).was.called(1)
+                assert.spy(cookies_mock.encrypt).was.called_with(
+                    "decoded-test-cookie-encryption-key",
+                    "captcha-cookie-value"
+                )
+                assert.spy(ngx_mock.exit).was.called_with(200)
             end)
         end)
     end)

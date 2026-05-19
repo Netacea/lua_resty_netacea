@@ -208,7 +208,9 @@ function _N:handleCaptcha()
   ngx.ctx.NetaceaState.grace_period = -1000
   ngx.log(ngx.DEBUG, "NETACEA CAPTCHA - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
 
-  self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
+  if protector_result.captcha == Constants['captchaStates'].PASS then
+    self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
+  end
   ngx.exit(protector_result.exit_status)
 end
 
