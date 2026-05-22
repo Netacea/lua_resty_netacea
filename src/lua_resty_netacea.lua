@@ -20,6 +20,27 @@ local function getIntegrationMode(n)
   return 'DISABLED'
 end
 
+local function setInjectHeaders(protector_result)
+  local idType = Constants['idTypes'].NONE
+  local mitigationType = Constants['mitigationTypes'].NONE
+  local captchaState = Constants['captchaStates'].NONE
+
+  if protector_result and protector_result.match then
+    idType = protector_result.match
+  end
+  if protector_result and protector_result.mitigate then
+    mitigationType = protector_result.mitigate
+  end
+  if protector_result and protector_result.captcha then
+    captchaState = protector_result.captcha
+  end
+
+  ngx.req.set_header('x-netacea-match', idType)
+  ngx.req.set_header('x-netacea-mitigate', mitigationType)
+  ngx.req.set_header('x-netacea-captcha', captchaState)
+  return idType, mitigationType, captchaState
+end
+
 function _N:new(options)
   local n = {}
   setmetatable(n, self)
@@ -266,6 +287,16 @@ function _N:mitigate()
 
     ngx.log(ngx.DEBUG, "NETACEA MITIGATE - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
 
+    if self.mitigationType == 'INJECT' then
+      local injectedIdType, injectedMitigationType, injectedCaptchaState = setInjectHeaders(protector_result)
+      ngx.log(ngx.DEBUG,
+        "NETACEA INJECT - setting recommendation headers: match=", injectedIdType,
+        ", mitigate=", injectedMitigationType,
+        ", captcha=", injectedCaptchaState)
+      self:refreshSession(parsed_cookie.reason)
+      return
+    end
+
     local best_mitigation = mitigation.getBestMitigation(protector_result)
 
     if best_mitigation == 'captcha' then
@@ -307,6 +338,13 @@ function _N:mitigate()
       mitigate = parsed_cookie.data.mit,
       captcha = parsed_cookie.data.cap
     }
+    if self.mitigationType == 'INJECT' then
+      ngx.log(ngx.DEBUG,
+        "NETACEA INJECT - setting recommendation headers from session: match=", parsed_cookie.data.mat,
+        ", mitigate=", parsed_cookie.data.mit,
+        ", captcha=", parsed_cookie.data.cap)
+      setInjectHeaders(ngx.ctx.NetaceaState.protector_result)
+    end
   end
 end
 return _N
