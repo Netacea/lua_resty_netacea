@@ -8,11 +8,38 @@ local Constants = require("lua_resty_netacea_constants")
 local mitigation = require("lua_resty_netacea_mitigation")
 
 local _N = {}
-_N._VERSION = '1.1.0'
+_N._VERSION = '1.2.0'
 _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'
 local cjson = require 'cjson'
+
+local function getIntegrationMode(n)
+  if n.mitigationEnabled then return n.mitigationType end
+  if n.ingestEnabled then return 'INGEST' end
+  return 'DISABLED'
+end
+
+local function setInjectHeaders(protector_result)
+  local idType = Constants['idTypes'].NONE
+  local mitigationType = Constants['mitigationTypes'].NONE
+  local captchaState = Constants['captchaStates'].NONE
+
+  if protector_result and protector_result.match then
+    idType = protector_result.match
+  end
+  if protector_result and protector_result.mitigate then
+    mitigationType = protector_result.mitigate
+  end
+  if protector_result and protector_result.captcha then
+    captchaState = protector_result.captcha
+  end
+
+  ngx.req.set_header('x-netacea-match', idType)
+  ngx.req.set_header('x-netacea-mitigate', mitigationType)
+  ngx.req.set_header('x-netacea-captcha', captchaState)
+  return idType, mitigationType, captchaState
+end
 
 function _N:new(options)
   local n = {}
@@ -40,8 +67,14 @@ function _N:new(options)
       n.ingestEnabled = false
     end
   end
-  -- mitigate:optional:mitigationEnabled
-  n.mitigationEnabled = options.mitigationEnabled or false
+  -- mitigate:optional:mitigationType
+  n.mitigationType = utils.parseOption(options.mitigationType, 'INGEST')
+  -- mitigationEnabled is deprecated. Use mitigationType instead.
+  if options.mitigationEnabled == false then
+    n.mitigationType = 'INGEST'
+    ngx.log(ngx.WARN, "NETACEA CONFIG - mitigationEnabled is deprecated; set mitigationType to INGEST instead")
+  end
+  n.mitigationEnabled = n.mitigationType == 'MITIGATE' or n.mitigationType == 'INJECT'
   -- mitigate:required:mitigationEndpoint
   n.mitigationEndpoint = options.mitigationEndpoint
   if type(n.mitigationEndpoint) ~= 'table' then
@@ -50,14 +83,16 @@ function _N:new(options)
   if not n.mitigationEndpoint[1] or n.mitigationEndpoint[1] == '' then
     n.mitigationEnabled = false
   end
-  -- mitigate:required:mitigationType
-  n.mitigationType = utils.parseOption(options.mitigationType, '')
-  if not n.mitigationType or (n.mitigationType ~= 'MITIGATE' and n.mitigationType ~= 'INJECT') then
+  if n.mitigationType ~= 'INGEST' and n.mitigationType ~= 'MITIGATE' and n.mitigationType ~= 'INJECT' then
     n.mitigationEnabled = false
   end
-  -- mitigate:required:secretKey
-  n.secretKey = b64.decode_base64url(options.secretKey) or ''
-  if not n.secretKey or n.secretKey == '' then
+  -- mitigate:required:cookieEncryptionKey
+  -- secretKey is kept as a backwards-compatible alias.
+  local encodedCookieEncryptionKey = options.cookieEncryptionKey or options.secretKey
+  n.cookieEncryptionKey = b64.decode_base64url(encodedCookieEncryptionKey) or ''
+  n.secretKey = n.cookieEncryptionKey
+  n.sessionEnabled = n.cookieEncryptionKey and n.cookieEncryptionKey ~= ''
+  if not n.cookieEncryptionKey or n.cookieEncryptionKey == '' then
     n.mitigationEnabled = false
   end
   -- global:optional:cookieName
@@ -70,6 +105,8 @@ function _N:new(options)
   n.captchaCookieAttributes = utils.parseOption(options.captchaCookieAttributes, 'Max-Age=86400; Path=/;')
   -- global:optional:realIpHeader
   n.realIpHeader = utils.parseOption(options.realIpHeader, '')
+  -- global:optional:realIpHeaderIndex
+  n.realIpHeaderIndex = utils.parseOption(options.realIpHeaderIndex, nil)
   -- global:optional:userIdKey
   n.userIdKey = utils.parseOption(options.userIdKey, '')
   -- global:required:apiKey
@@ -83,6 +120,7 @@ function _N:new(options)
   n._MODULE_TYPE = _N._TYPE
   n._MODULE_VERSION = _N._VERSION
 
+  ngx.log(ngx.DEBUG, "NETACEA CONFIG - integration mode: ", getIntegrationMode(n))
 
   if n.ingestEnabled then
     n.ingestPipeline = Ingest:new(options.kinesisProperties or {}, n)
@@ -118,22 +156,27 @@ end
 function _N:ingest()
   ngx.log(ngx.DEBUG, "NETACEA INGEST - in netacea:ingest(): ", self.ingestEnabled)
   if not self.ingestEnabled then return nil end
-  ngx.ctx.NetaceaState.bc_type = self:setBcType(
-    tostring(ngx.ctx.NetaceaState.protector_result.match or Constants['idTypes'].NONE),
-    tostring(ngx.ctx.NetaceaState.protector_result.mitigate or Constants['mitigationTypes'].NONE),
-    tostring(ngx.ctx.NetaceaState.protector_result.captcha or Constants['captchaStates'].NONE)
-  )
+  local NetaceaState = ngx.ctx.NetaceaState
+  local protector_result = NetaceaState and NetaceaState.protector_result
+  if protector_result then
+    NetaceaState.bc_type = self:setBcType(
+      tostring(protector_result.match or Constants['idTypes'].NONE),
+      tostring(protector_result.mitigate or Constants['mitigationTypes'].NONE),
+      tostring(protector_result.captcha or Constants['captchaStates'].NONE)
+    )
+  end
   return self.ingestPipeline:ingest()
 end
 
 function _N:handleSession()
   ngx.ctx.NetaceaState = {}
-  ngx.ctx.NetaceaState.client = utils:getIpAddress(ngx.var, self.realIpHeader)
+  ngx.ctx.NetaceaState.client = utils:getIpAddress(ngx.var, self.realIpHeader, self.realIpHeaderIndex)
   ngx.ctx.NetaceaState.user_agent = ngx.var.http_user_agent or ''
 
   -- Check cookie
   local cookie = ngx.var['cookie_' .. self.cookieName] or ''
-  local parsed_cookie = netacea_cookies.parseMitataCookie(cookie, self.secretKey)
+  ngx.ctx.mitata = cookie
+  local parsed_cookie = netacea_cookies.parseMitataCookie(cookie, self.cookieEncryptionKey)
   ngx.log(ngx.DEBUG, "NETACEA MITIGATE - parsed cookie: ", cjson.encode(parsed_cookie))
   if parsed_cookie.user_id then
     ngx.ctx.NetaceaState.UserId = parsed_cookie.user_id
@@ -141,7 +184,7 @@ function _N:handleSession()
 
   -- Get captcha cookie
   local captcha_cookie_raw = ngx.var['cookie_' .. self.captchaCookieName] or ''
-  local captcha_cookie = netacea_cookies.decrypt(self.secretKey, captcha_cookie_raw)
+  local captcha_cookie = netacea_cookies.decrypt(self.cookieEncryptionKey, captcha_cookie_raw)
   if captcha_cookie and captcha_cookie ~= '' then
     ngx.ctx.NetaceaState.captcha_cookie = captcha_cookie
   end
@@ -149,12 +192,16 @@ function _N:handleSession()
 end
 
 function _N:refreshSession(reason)
-  local protector_result = ngx.ctx.NetaceaState.protector_result
+  local protector_result = ngx.ctx.NetaceaState.protector_result or {
+    match = Constants['idTypes'].NONE,
+    mitigate = Constants['mitigationTypes'].NONE,
+    captcha = Constants['captchaStates'].NONE
+  }
 
   local grace_period = ngx.ctx.NetaceaState.grace_period or 60
 
   local new_cookie = netacea_cookies.generateNewCookieValue(
-      self.secretKey,
+      self.cookieEncryptionKey,
       ngx.ctx.NetaceaState.client,
       ngx.ctx.NetaceaState.UserId,
       netacea_cookies.newUserId(),
@@ -169,9 +216,13 @@ function _N:refreshSession(reason)
     local cookies = {
       self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';' .. self.cookieAttributes
     }
+    ngx.ctx.mitata = new_cookie.mitata_jwe
 
     if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
-      local captcha_cookie_encrypted = netacea_cookies.encrypt(self.secretKey, protector_result.captcha_cookie)
+      local captcha_cookie_encrypted = netacea_cookies.encrypt(
+        self.cookieEncryptionKey,
+        protector_result.captcha_cookie
+      )
       table.insert(cookies,
         self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';'.. self.captchaCookieAttributes)
     end
@@ -189,13 +240,40 @@ function _N:handleCaptcha()
   ngx.ctx.NetaceaState.grace_period = -1000
   ngx.log(ngx.DEBUG, "NETACEA CAPTCHA - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
 
-  self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
+  if protector_result.captcha == Constants['captchaStates'].PASS then
+    self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
+  end
   ngx.exit(protector_result.exit_status)
 end
 
 
+function _N:refreshIngestSession()
+  local parsed_cookie = self:handleSession()
+
+  if parsed_cookie.valid then
+    ngx.ctx.NetaceaState.protector_result = {
+      match = parsed_cookie.data.mat,
+      mitigate = parsed_cookie.data.mit,
+      captcha = parsed_cookie.data.cap
+    }
+    return parsed_cookie
+  end
+
+  if not ngx.ctx.NetaceaState.UserId then
+    ngx.ctx.NetaceaState.UserId = netacea_cookies.newUserId()
+  end
+
+  self:refreshSession(parsed_cookie.reason)
+  return parsed_cookie
+end
+
 function _N:mitigate()
-  if not self.mitigationEnabled then return nil end
+  if not self.mitigationEnabled then
+    if self.sessionEnabled then
+      return self:refreshIngestSession()
+    end
+    return nil
+  end
   local parsed_cookie = self:handleSession()
 
   if not parsed_cookie.valid then
@@ -208,6 +286,16 @@ function _N:mitigate()
     ngx.ctx.NetaceaState.protector_result = protector_result
 
     ngx.log(ngx.DEBUG, "NETACEA MITIGATE - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
+
+    if self.mitigationType == 'INJECT' then
+      local injectedIdType, injectedMitigationType, injectedCaptchaState = setInjectHeaders(protector_result)
+      ngx.log(ngx.DEBUG,
+        "NETACEA INJECT - setting recommendation headers: match=", injectedIdType,
+        ", mitigate=", injectedMitigationType,
+        ", captcha=", injectedCaptchaState)
+      self:refreshSession(parsed_cookie.reason)
+      return
+    end
 
     local best_mitigation = mitigation.getBestMitigation(protector_result)
 
@@ -250,6 +338,13 @@ function _N:mitigate()
       mitigate = parsed_cookie.data.mit,
       captcha = parsed_cookie.data.cap
     }
+    if self.mitigationType == 'INJECT' then
+      ngx.log(ngx.DEBUG,
+        "NETACEA INJECT - setting recommendation headers from session: match=", parsed_cookie.data.mat,
+        ", mitigate=", parsed_cookie.data.mit,
+        ", captcha=", parsed_cookie.data.cap)
+      setInjectHeaders(ngx.ctx.NetaceaState.protector_result)
+    end
   end
 end
 return _N

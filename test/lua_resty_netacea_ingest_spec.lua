@@ -33,6 +33,7 @@ describe("lua_resty_netacea_ingest", function()
                 request_time = "0.123",
                 bytes_sent = "1024",
                 http_referer = "https://example.com",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2",
                 query_string = "param=value",
                 host = "test.example.com",
                 request_id = "req-12345",
@@ -377,6 +378,7 @@ describe("lua_resty_netacea_ingest", function()
                 _MODULE_TYPE = "nginx", 
                 _MODULE_VERSION = "2.1.0",
                 realIpHeader = "x_forwarded_for",
+                realIpHeaderIndex = -1,
                 mitigationType = "monitor"
             })
         end)
@@ -392,6 +394,7 @@ describe("lua_resty_netacea_ingest", function()
             assert.is.equal("01/Jan/2022:00:00:00 +0000", queued_item.TimeLocal)
             assert.is.equal(1640995200123, queued_item.TimeUnixMsUTC)
             assert.is.equal("192.168.1.1", queued_item.RealIp)
+            assert.is.equal("203.0.113.1, 203.0.113.2", queued_item.XForwardedFor)
             assert.is.equal("Test-Agent/1.0", queued_item.UserAgent)
             assert.is.equal("200", queued_item.Status)
             assert.is.equal("0.123", queued_item.RequestTime)
@@ -419,12 +422,13 @@ describe("lua_resty_netacea_ingest", function()
 
         it("should handle missing NetaceaState gracefully", function()
             ngx_mock.ctx.NetaceaState = nil
+            ngx_mock.var.http_x_forwarded_for = nil
             
             ingest:ingest()
             
             local queued_item = ingest.data_queue:pop()
             assert.is.equal("127.0.0.1", queued_item.RealIp) -- default from utils mock
-            assert.is.equal("-", queued_item.UserId)
+            assert.is.equal("", queued_item.UserId)
             assert.is_nil(queued_item.NetaceaMitigationApplied)
         end)
 
@@ -435,13 +439,19 @@ describe("lua_resty_netacea_ingest", function()
             ingest:ingest()
             
             assert.spy(utils_mock.getIpAddress).was.called()
-            -- Verify the call was made with correct number of arguments
+            assert.spy(utils_mock.getIpAddress).was.called_with(
+                utils_mock,
+                ngx_mock.var,
+                "x_forwarded_for",
+                -1
+            )
             assert.is.equal(1, #utils_mock.getIpAddress.calls)
         end)
 
         it("should handle missing optional fields with defaults", function()
             ngx_mock.var.http_user_agent = nil
             ngx_mock.var.http_referer = nil
+            ngx_mock.var.http_x_forwarded_for = nil
             ngx_mock.var.query_string = nil
             ngx_mock.var.host = nil
             ngx_mock.var.request_id = nil
@@ -450,11 +460,12 @@ describe("lua_resty_netacea_ingest", function()
             ingest:ingest()
             
             local queued_item = ingest.data_queue:pop()
-            assert.is.equal("-", queued_item.UserAgent)
-            assert.is.equal("-", queued_item.Referer)
+            assert.is.equal("", queued_item.UserAgent)
+            assert.is.equal("", queued_item.Referer)
+            assert.is.equal("", queued_item.XForwardedFor)
             assert.is.equal("", queued_item.Query)
-            assert.is.equal("-", queued_item.RequestHost)
-            assert.is.equal("-", queued_item.RequestId)
+            assert.is.equal("", queued_item.RequestHost)
+            assert.is.equal("", queued_item.RequestId)
             assert.is.equal(0, queued_item.BytesReceived)
         end)
 

@@ -44,6 +44,9 @@ luac.out
 
 tags
 
+# Local environment config
+.env
+
 # luacov reports
 luacov.report
 luacov.report.*
