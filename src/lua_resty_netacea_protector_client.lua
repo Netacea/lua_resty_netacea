@@ -51,7 +51,7 @@ end
 function ProtectorClient:checkReputation()
     local headers = self:getMitigationRequestHeaders()
     local hc = createHttpConnection()
-    ngx.log(ngx.ERR, 'Netacea mitigation headers: ' .. require('cjson').encode(headers))
+    ngx.log(ngx.DEBUG, 'Netacea mitigation headers: ' .. require('cjson').encode(headers))
     self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
 
     local res, err = hc:request_uri(
@@ -98,7 +98,7 @@ function ProtectorClient:validateCaptcha(captcha_data)
   local mitigationType = res.headers['x-netacea-mitigate'] or constants['mitigationTypes'].NONE
   local captchaState = res.headers['x-netacea-captcha'] or constants['captchaStates'].NONE
 
-  ngx.log(ngx.ERR,
+  ngx.log(ngx.DEBUG,
     'Netacea captcha validation response: match=' .. idType
     .. ', mitigate=' .. mitigationType .. ', captcha=' .. captchaState)
 

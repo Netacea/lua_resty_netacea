@@ -12,7 +12,7 @@ local ngx = require 'ngx'
 local Kinesis = {}
 Kinesis.__index = Kinesis
 
-ngx.log(ngx.ERR, "*** kinesis_resty module loaded ***")
+ngx.log(ngx.DEBUG, "*** kinesis_resty module loaded ***")
 
 -- FFI-based HMAC-SHA256
 ffi.cdef[[
