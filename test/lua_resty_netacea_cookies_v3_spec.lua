@@ -74,7 +74,7 @@ describe("lua_resty_netacea_cookies_v3", function()
                     return nil
                 end
                 if not str then
-                    return nil
+                    error("bad argument #1 to 'decode_args' (string expected, got nil)")
                 end
                 local result = {}
                 for pair in str:gmatch("[^&]+") do
@@ -560,6 +560,7 @@ describe("lua_resty_netacea_cookies_v3", function()
             assert.is_false(result.valid)
             assert.is.equal('invalid_session', result.reason)
             assert.spy(jwt_mock.verify).was.called_with(match.is_not_nil(), "secret_key", "invalid_token")
+            assert.spy(ngx_mock.decode_args).was_not_called()
         end)
 
         it("should return invalid result for invalid payload format", function()
@@ -788,6 +789,20 @@ describe("lua_resty_netacea_cookies_v3", function()
         it("should return nil for invalid JWT token", function()
             local result = NetaceaCookies.decrypt("secret_key", "invalid_token")
             
+            assert.is_nil(result)
+            assert.spy(jwt_mock.verify).was.called_with(match.is_not_nil(), "secret_key", "invalid_token")
+        end)
+
+        it("should return nil when JWT decryption fails without a decoded token", function()
+            jwt_mock.verify = spy.new(function()
+                return nil
+            end)
+
+            local ok, result = pcall(function()
+                return NetaceaCookies.decrypt("secret_key", "invalid_token")
+            end)
+
+            assert.is_true(ok)
             assert.is_nil(result)
             assert.spy(jwt_mock.verify).was.called_with(match.is_not_nil(), "secret_key", "invalid_token")
         end)
