@@ -111,6 +111,56 @@ describe("netacea_utils", function()
             assert.is.equal("203.0.113.1", result)
         end)
 
+        it("should return the indexed header value when index is positive", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2, 203.0.113.3"
+            }
+
+            local result = utils:getIpAddress(vars, "x_forwarded_for", 1)
+            assert.is.equal("203.0.113.2", result)
+        end)
+
+        it("should return the indexed header value when index is zero", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2"
+            }
+
+            local result = utils:getIpAddress(vars, "x_forwarded_for", 0)
+            assert.is.equal("203.0.113.1", result)
+        end)
+
+        it("should return the indexed header value when index is negative", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2, 203.0.113.3"
+            }
+
+            local result = utils:getIpAddress(vars, "x_forwarded_for", -2)
+            assert.is.equal("203.0.113.2", result)
+        end)
+
+        it("should fall back to remote_addr when header index is out of range", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2"
+            }
+
+            local result = utils:getIpAddress(vars, "x_forwarded_for", -3)
+            assert.is.equal("192.168.1.1", result)
+        end)
+
+        it("should apply realIpHeaderIndex to non x-forwarded-for headers", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_custom_ip = "203.0.113.1, 203.0.113.2"
+            }
+
+            local result = utils:getIpAddress(vars, "x_custom_ip", 1)
+            assert.is.equal("203.0.113.2", result)
+        end)
+
         it("should return remote_addr when real IP header doesn't exist", function()
             local vars = {
                 remote_addr = "192.168.1.1"
@@ -173,6 +223,36 @@ describe("netacea_utils", function()
             
             local result = utils:getIpAddress(vars, "x_forwarded_for")
             assert.is.equal("203.0.113.1", result)
+        end)
+
+        it("should normalize realIpHeader dashes to nginx variable underscores", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1"
+            }
+
+            local result = utils:getIpAddress(vars, "x-forwarded-for")
+            assert.is.equal("203.0.113.1", result)
+        end)
+
+        it("should normalize realIpHeader case", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1"
+            }
+
+            local result = utils:getIpAddress(vars, "X-Forwarded-For")
+            assert.is.equal("203.0.113.1", result)
+        end)
+
+        it("should apply header index after normalizing the header name", function()
+            local vars = {
+                remote_addr = "192.168.1.1",
+                http_x_forwarded_for = "203.0.113.1, 203.0.113.2"
+            }
+
+            local result = utils:getIpAddress(vars, "X-Forwarded-For", -1)
+            assert.is.equal("203.0.113.2", result)
         end)
 
         it("should handle missing remote_addr gracefully", function()
@@ -329,6 +409,79 @@ describe("netacea_utils", function()
         it("should handle empty string after trimming", function()
             local result = utils.parseOption("\t\n\r ", "default_value")
             assert.is.equal("default_value", result)
+        end)
+    end)
+
+    describe("env", function()
+        local original_getenv
+        local env_values
+
+        before_each(function()
+            original_getenv = os.getenv
+            env_values = {}
+            os.getenv = function(name)
+                return env_values[name]
+            end
+        end)
+
+        after_each(function()
+            os.getenv = original_getenv
+        end)
+
+        it("should return an environment variable when it is set", function()
+            env_values.NETACEA_TEST_VALUE = "configured-value"
+
+            local result = utils.env("NETACEA_TEST_VALUE", "default-value")
+
+            assert.is.equal("configured-value", result)
+        end)
+
+        it("should return the default value when an environment variable is not set", function()
+            local result = utils.env("NETACEA_TEST_VALUE", "default-value")
+
+            assert.is.equal("default-value", result)
+        end)
+    end)
+
+    describe("envEnabled", function()
+        local original_getenv
+        local env_values
+
+        before_each(function()
+            original_getenv = os.getenv
+            env_values = {}
+            os.getenv = function(name)
+                return env_values[name]
+            end
+        end)
+
+        after_each(function()
+            os.getenv = original_getenv
+        end)
+
+        it("should return the default value when an environment variable is not set", function()
+            local result = utils.envEnabled("NETACEA_INGEST_ENABLED", true)
+
+            assert.is_true(result)
+        end)
+
+        it("should return true when an environment variable is exactly true", function()
+            env_values.NETACEA_INGEST_ENABLED = "true"
+
+            local result = utils.envEnabled("NETACEA_INGEST_ENABLED", false)
+
+            assert.is_true(result)
+        end)
+
+        it("should return false when an environment variable is set to anything else", function()
+            env_values.NETACEA_INGEST_ENABLED = "True"
+            assert.is_false(utils.envEnabled("NETACEA_INGEST_ENABLED", true))
+
+            env_values.NETACEA_INGEST_ENABLED = "false"
+            assert.is_false(utils.envEnabled("NETACEA_INGEST_ENABLED", true))
+
+            env_values.NETACEA_INGEST_ENABLED = ""
+            assert.is_false(utils.envEnabled("NETACEA_INGEST_ENABLED", true))
         end)
     end)
 

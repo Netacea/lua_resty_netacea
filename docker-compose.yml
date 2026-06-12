@@ -7,6 +7,8 @@ services:
       context: .
       target: build
     container_name: resty
+    env_file:
+     - ".env"
     ports:
      - "8080:80"
      - "443:443"
@@ -39,6 +41,8 @@ services:
     build:
       dockerfile: Dockerfile.nginx_lua
       context: .
+    env_file:
+      - ".env"
     ports:
         - "80:80"
     volumes:

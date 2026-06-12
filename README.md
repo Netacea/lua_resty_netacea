@@ -19,11 +19,24 @@ The Dockerfile contains a multi-stage build, including:
 
 The docker compose file is used to mount local files to the right place in the image to support development.
 
+### Environment variables
+
+The Docker Compose services that run NGINX load Netacea configuration from a local `.env` file.
+Create it from the example file, then fill in the values provided by the Netacea Solutions Engineering team:
+
+```sh
+cp .env.example .env
+```
+
+The `.env` file is ignored by git because it can contain sensitive values such as API keys, cookie encryption keys, and Kinesis credentials.
+Keep `.env.example` updated when adding or removing configuration variables.
+
 ### Run development version
 
-1. Update `./src/conf/nginx.conf` to include Netacea configuration and server configuration. Default is the NGINX instance will just return a static "Hello world" page. See "Configuration" below
-2. `docker compose up resty`
-3. Access [](http://localhost:8080)
+1. Create `./.env` from `./.env.example` and set the Netacea environment variables.
+2. Update `./src/conf/nginx.conf` to include server configuration. See "Configuration" below.
+3. `docker compose up --build resty`
+4. Access [](http://localhost:8080)
 
 ### Run tests
 
@@ -36,107 +49,96 @@ With coverage report (sent to stdout) `export LUACOV_REPORT=1 && ./run_lua_tests
 
 ##### Docker compose
 
-Without coverage report: `docker compose run --build test`
+Without coverage report: `docker compose run --rm --build test`
 With coverage report (sent to stdout) `docker compose run -e LUACOV_REPORT=1 --build test [> output.html]`
 
 #### Linter
 
-`docker compose run --build lint`
+`docker compose run --rm --build lint`
 
 ## Configuration
 
-### nginx.conf - mitigate
+### .env - ingest only
 
-```conf
-worker_processes 1;
+Use ingest-only mode when you want to send request data to the ingest pipeline without calling the Mitigation Endpoint.
 
-events {
-  worker_connections 1024;
-}
+Ingest is enabled by default. Set `NETACEA_PROTECTION_MODE` to `INGEST`.
 
-http {
-  lua_package_path "/usr/local/share/lua/5.1/?.lua;;";
-  lua_max_running_timers  2048;
-  lua_max_pending_timers  4096;
-  lua_socket_pool_size    1024;
-  lua_need_request_body on;
-  resolver 8.8.8.8 ipv6=off;
-  lua_ssl_verify_depth 2;
-  lua_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-  init_worker_by_lua_block {
-    netacea = (require 'lua_resty_netacea'):new({
-      ingestEndpoint     = 'ingest-endpoint',
-      mitigationEndpoint = 'mitigation-endpoint',
-      apiKey             = 'your-api-key',
-      secretKey          = 'your-secret-key',
-      realIpHeader       = 'realip-header',
-      ingestEnabled      = true,
-      mitigationEnabled  = true,
-      mitigationType     = 'MITIGATE'
-    })
-  }
-  log_by_lua_block {
-    netacea:ingest()
-  }
-  access_by_lua_block {
-    netacea:run()
-  }
+Kinesis properties must be provided for ingest to remain enabled.
 
-  server {
-    listen 80;
-    server_name localhost;
-    location / {
-      default_type text/html;
-      content_by_lua 'ngx.say("<p>hello, world</p>")';
-    }
-  }
-}
+When `realIpHeaderIndex` is set, `realIpHeader` is parsed as a comma-separated list and the indexed value is used. Indexing starts at `0`; negative indexes count from the end, so `-1` selects the last value.
+This is useful for, though not limited to, parsing `X-Forwarded-For` values.
+
+```dotenv
+NETACEA_PROTECTION_MODE=INGEST
+NETACEA_API_KEY=your-api-key
+NETACEA_COOKIE_ENCRYPTION_KEY=your-cookie-encryption-key
+NETACEA_COOKIE_NAME=your-session-cookie-name
+NETACEA_CAPTCHA_COOKIE_NAME=your-captcha-cookie-name
+NETACEA_REAL_IP_HEADER=X-Forwarded-For
+NETACEA_REAL_IP_HEADER_INDEX=0
+NETACEA_KINESIS_ACCESS_KEY=your-aws-access-key
+NETACEA_KINESIS_SECRET_KEY=your-aws-secret-key
+NETACEA_KINESIS_STREAM_NAME=your-kinesis-stream
 ```
 
-### nginx.conf - inject
+### .env - mitigate
 
-```conf
-worker_processes 1;
+Use MITIGATE as the NETACEA_PROTECTION_MODE when you want the integration to
+call the Protector API and enforce mitigation responses.
 
-events {
-  worker_connections 1024;
-}
-
-http {
-  lua_package_path "/usr/local/share/lua/5.1/?.lua;;";
-  lua_max_running_timers  2048;
-  lua_max_pending_timers  4096;
-  lua_socket_pool_size    1024;
-  lua_need_request_body on;
-  resolver 8.8.8.8 ipv6=off;
-  lua_ssl_verify_depth 2;
-  lua_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-  init_worker_by_lua_block {
-    netacea = (require 'lua_resty_netacea'):new({
-      ingestEndpoint     = 'ingest-endpoint',
-      mitigationEndpoint = 'mitigation-endpoint',
-      apiKey             = 'your-api-key',
-      secretKey          = 'your-secret-key',
-      realIpHeader       = 'realip-header',
-      ingestEnabled      = true,
-      mitigationEnabled  = true,
-      mitigationType     = 'INJECT'
-    })
-  }
-  log_by_lua_block {
-    netacea:ingest()
-  }
-  access_by_lua_block {
-    netacea:run()
-  }
-
-  server {
-    listen 80;
-    server_name localhost;
-    location / {
-      default_type text/html;
-      content_by_lua 'ngx.say("<p>hello, world</p>")';
-    }
-  }
-}
+```dotenv
+NETACEA_PROTECTION_MODE=MITIGATE
+NETACEA_API_KEY=your-api-key
+NETACEA_COOKIE_ENCRYPTION_KEY=your-cookie-encryption-key
+NETACEA_COOKIE_NAME=your-session-cookie-name
+NETACEA_CAPTCHA_COOKIE_NAME=your-captcha-cookie-name
+NETACEA_REAL_IP_HEADER=X-Forwarded-For
+NETACEA_REAL_IP_HEADER_INDEX=0
+NETACEA_KINESIS_ACCESS_KEY=your-aws-access-key
+NETACEA_KINESIS_SECRET_KEY=your-aws-secret-key
+NETACEA_KINESIS_STREAM_NAME=your-kinesis-stream
+NETACEA_PROTECTOR_API_URL=https://your-protector-api-url
 ```
+
+### .env - inject
+
+Use INJECT as the NETACEA_PROTECTION_MODE when you want the integration to
+call the Protector API but defer mitigation to downstream services.
+
+```dotenv
+NETACEA_PROTECTION_MODE=INJECT
+NETACEA_API_KEY=your-api-key
+NETACEA_COOKIE_ENCRYPTION_KEY=your-cookie-encryption-key
+NETACEA_COOKIE_NAME=your-session-cookie-name
+NETACEA_CAPTCHA_COOKIE_NAME=your-captcha-cookie-name
+NETACEA_REAL_IP_HEADER=X-Forwarded-For
+NETACEA_REAL_IP_HEADER_INDEX=0
+NETACEA_KINESIS_ACCESS_KEY=your-aws-access-key
+NETACEA_KINESIS_SECRET_KEY=your-aws-secret-key
+NETACEA_KINESIS_STREAM_NAME=your-kinesis-stream
+NETACEA_PROTECTOR_API_URL=https://your-protector-api-url
+```
+
+### Environment variable default values reference
+
+| Environment variable                | Default                  |
+| ----------------------------------- | ------------------------ |
+| `NETACEA_PROTECTION_MODE`           | `INGEST`                 |
+| `NETACEA_INGEST_ENABLED`            | `true`                   |
+| `NETACEA_PROTECTOR_API_URL`         | `""`                     |
+| `NETACEA_API_KEY`                   | none                     |
+| `NETACEA_COOKIE_ENCRYPTION_KEY`     | none                     |
+| `NETACEA_SECRET_KEY`                | none                     |
+| `NETACEA_COOKIE_NAME`               | `_mitata`                |
+| `NETACEA_CAPTCHA_COOKIE_NAME`       | `_mitatacaptcha`         |
+| `NETACEA_COOKIE_ATTRIBUTES`         | `Max-Age=86400; Path=/;` |
+| `NETACEA_CAPTCHA_COOKIE_ATTRIBUTES` | `Max-Age=86400; Path=/;` |
+| `NETACEA_REAL_IP_HEADER`            | `""`                     |
+| `NETACEA_REAL_IP_HEADER_INDEX`      | unset                    |
+| `NETACEA_KINESIS_ACCESS_KEY`        | `""`                     |
+| `NETACEA_KINESIS_SECRET_KEY`        | `""`                     |
+| `NETACEA_KINESIS_STREAM_NAME`       | `""`                     |
+| `NETACEA_KINESIS_REGION`            | `eu-west-1`              |
+| `NETACEA_KINESIS_BATCH_SIZE`        | `25`                     |
+| `NETACEA_KINESIS_BATCH_TIMEOUT`     | `1.0`                    |
