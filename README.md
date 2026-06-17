@@ -128,6 +128,7 @@ NETACEA_PROTECTOR_API_URL=https://your-protector-api-url
 | `NETACEA_CAPTCHA_COOKIE_ATTRIBUTES` | `Max-Age=86400; Path=/;` |
 | `NETACEA_REAL_IP_HEADER`            | `""`                     |
 | `NETACEA_REAL_IP_HEADER_INDEX`      | unset                    |
+| `NETACEA_CHECKPOINT_SIGNAL_PATH`    | unset                    |
 | `NETACEA_KINESIS_ACCESS_KEY`        | `""`                     |
 | `NETACEA_KINESIS_SECRET_KEY`        | `""`                     |
 | `NETACEA_KINESIS_STREAM_NAME`       | `""`                     |

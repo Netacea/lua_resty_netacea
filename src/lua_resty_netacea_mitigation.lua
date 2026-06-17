@@ -11,15 +11,28 @@ function _M.getBestMitigation(protector_result)
 
   if (mitigate == Constants.mitigationTypes.NONE) then return nil end
   if (not Constants.mitigationTypesText[mitigate]) then return nil end
-
   if (mitigate == Constants.mitigationTypes.ALLOW) then return nil end
+
+  -- Handle captcha pass
   if (captcha == Constants.captchaStates.PASS) then return nil end
   if (captcha == Constants.captchaStates.COOKIEPASS) then return nil end
 
+  -- Handle checkpoint pass
+  if (captcha == Constants.checkpointStates.PASS) then return nil end
+  if (captcha == Constants.checkpointStates.COOKIEPASS) then return nil end
+
+  -- Handle captcha serve
   if (mitigate == Constants.mitigationTypes.BLOCKED
       and (captcha == Constants.captchaStates.SERVE
         or captcha == Constants['captchaStates'].COOKIEFAIL)) then
     return 'captcha'
+  end
+
+  -- handle checkpoint serve
+  if (mitigate == Constants.mitigationTypes.BLOCKED
+      and (captcha == Constants.checkpointStates.SERVE
+        or captcha == Constants['checkpointStates'].COOKIEFAIL)) then
+    return 'checkpoint'
   end
 
   if (mitigate == Constants.mitigationTypes.MONETISED) then

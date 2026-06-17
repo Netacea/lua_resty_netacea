@@ -109,6 +109,8 @@ function _N:new(options)
   n.realIpHeaderIndex = utils.parseOption(options.realIpHeaderIndex, nil)
   -- global:optional:userIdKey
   n.userIdKey = utils.parseOption(options.userIdKey, '')
+  -- global:optional:checkpointSignalPath
+  n.checkpointSignalPath = utils.parseOption(options.checkpointSignalPath, nil)
   -- global:required:apiKey
   n.apiKey = utils.parseOption(options.apiKey, nil)
   if not n.apiKey then
@@ -148,7 +150,14 @@ function _N:setBcType(match, mitigate, captcha)
     mitigationApplied = mitigationApplied .. (Constants.mitigateBcTypes[mitigate] or UNKNOWN)
   end
   if (captcha ~= '0') then
-    mitigationApplied = mitigationApplied .. ',' .. (Constants.captchaBcTypes[captcha] or UNKNOWN)
+    if mitigationApplied ~= '' then
+      mitigationApplied = mitigationApplied .. ','
+    end
+    mitigationApplied = mitigationApplied .. (
+      Constants.captchaBcTypes[captcha] or
+        Constants.checkpointBcTypes[captcha] or
+          UNKNOWN
+    )
   end
   return mitigationApplied
 end
@@ -192,6 +201,10 @@ function _N:handleSession()
 end
 
 function _N:refreshSession(reason)
+  if shouldSetCookies == nil then
+    shouldSetCookies = true
+  end
+
   local protector_result = ngx.ctx.NetaceaState.protector_result or {
     match = Constants['idTypes'].NONE,
     mitigate = Constants['mitigationTypes'].NONE,
@@ -201,33 +214,33 @@ function _N:refreshSession(reason)
   local grace_period = ngx.ctx.NetaceaState.grace_period or 60
 
   local new_cookie = netacea_cookies.generateNewCookieValue(
+    self.cookieEncryptionKey,
+    ngx.ctx.NetaceaState.client,
+    ngx.ctx.NetaceaState.UserId,
+    netacea_cookies.newUserId(),
+    reason,
+    os.time(),
+    grace_period,
+    protector_result.match,
+    protector_result.mitigate,
+    protector_result.captcha,
+    {}
+  )
+  local cookies = {
+    self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';' .. self.cookieAttributes
+  }
+  ngx.ctx.mitata = new_cookie.mitata_jwe
+
+  if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
+    local captcha_cookie_encrypted = netacea_cookies.encrypt(
       self.cookieEncryptionKey,
-      ngx.ctx.NetaceaState.client,
-      ngx.ctx.NetaceaState.UserId,
-      netacea_cookies.newUserId(),
-      reason,
-      os.time(),
-      grace_period,
-      protector_result.match,
-      protector_result.mitigate,
-      protector_result.captcha,
-      {}
+      protector_result.captcha_cookie
     )
-    local cookies = {
-      self.cookieName .. '=' .. new_cookie.mitata_jwe .. ';' .. self.cookieAttributes
-    }
-    ngx.ctx.mitata = new_cookie.mitata_jwe
+    table.insert(cookies,
+      self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';'.. self.captchaCookieAttributes)
+  end
 
-    if protector_result.captcha_cookie and protector_result.captcha_cookie ~= '' then
-      local captcha_cookie_encrypted = netacea_cookies.encrypt(
-        self.cookieEncryptionKey,
-        protector_result.captcha_cookie
-      )
-      table.insert(cookies,
-        self.captchaCookieName .. '=' .. captcha_cookie_encrypted .. ';'.. self.captchaCookieAttributes)
-    end
-
-    ngx.header['Set-Cookie'] = cookies
+  ngx.header['Set-Cookie'] = cookies
 end
 
 function _N:handleCaptcha()
@@ -241,6 +254,9 @@ function _N:handleCaptcha()
   ngx.log(ngx.DEBUG, "NETACEA CAPTCHA - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
 
   if protector_result.captcha == Constants['captchaStates'].PASS then
+    self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
+  end
+  if protector_result.captcha == Constants['checkpointStates'].PASS then
     self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
   end
   ngx.exit(protector_result.exit_status)
@@ -276,6 +292,18 @@ function _N:mitigate()
   end
   local parsed_cookie = self:handleSession()
 
+  -- Return early on requests to the checkpoint signal path
+  local signalPathEnabled = (self.checkpointSignalPath or '') ~= ''
+  if signalPathEnabled and ngx.var.uri == self.checkpointSignalPath then
+    ngx.ctx.NetaceaState.bc_type = self:setBcType(
+      parsed_cookie.data.mat or nil,
+      parsed_cookie.data.mit or nil,
+      Constants['checkpointStates'].SIGNAL
+    )
+    ngx.exit(ngx.OK)
+    return
+  end
+
   if not parsed_cookie.valid then
     if not ngx.ctx.NetaceaState.UserId then
       ngx.ctx.NetaceaState.UserId = netacea_cookies.newUserId()
@@ -298,6 +326,7 @@ function _N:mitigate()
     end
 
     local best_mitigation = mitigation.getBestMitigation(protector_result)
+    ngx.log(ngx.DEBUG, "NETACEA MITIGATE best mitigation: " .. (best_mitigation or "none"))
 
     if best_mitigation == 'captcha' then
       ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving captcha")
@@ -305,6 +334,15 @@ function _N:mitigate()
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
       mitigation.serveCaptcha(captchaBody)
+      return
+    end
+
+    if best_mitigation == 'checkpoint' then
+      ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving checkpoint")
+      local checkpointBody = protector_result.response.body
+      ngx.ctx.NetaceaState.grace_period = -1000
+      self:refreshSession(parsed_cookie.reason)
+      mitigation.serveCaptcha(checkpointBody)
       return
     end
 

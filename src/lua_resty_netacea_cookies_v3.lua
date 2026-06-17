@@ -129,6 +129,7 @@ function NetaceaCookies.parseMitataCookie(cookie, cookieEncryptionKey)
     if ist + grp < ngx.time() then
         return {
             valid = false,
+            data = decoded,
             user_id = decoded.uid,
             reason = constants['issueReasons'].EXPIRED_SESSION
         }
@@ -137,6 +138,7 @@ function NetaceaCookies.parseMitataCookie(cookie, cookieEncryptionKey)
     if decoded.cip ~= ngx.ctx.NetaceaState.client then
         return {
             valid = false,
+            data = decoded,
             user_id = decoded.uid,
             reason = constants['issueReasons'].IP_CHANGE
         }

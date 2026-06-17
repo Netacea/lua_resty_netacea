@@ -22,6 +22,9 @@ describe("lua_resty_netacea_protector_client", function()
                     captcha_cookie = nil
                 }
             },
+            var = {
+                http_content_type = "application/json"
+            },
             log = spy.new(function() end),
             ERR = 3,
             HTTP_FORBIDDEN = 403,
@@ -92,10 +95,20 @@ describe("lua_resty_netacea_protector_client", function()
             })
             local headers = client:getMitigationRequestHeaders()
             assert.are.equal("test-api-key", headers["x-netacea-api-key"])
-            assert.are.equal("application/x-www-form-urlencoded", headers["content-type"])
+            assert.are.equal("application/json", headers["content-type"])
             assert.are.equal("Test-Agent/1.0", headers["user-agent"])
             assert.are.equal("192.168.1.1", headers["x-netacea-client-ip"])
             assert.are.equal("user123", headers["x-netacea-userid"])
+        end)
+
+        it("should default content-type to application/x-www-form-urlencoded when missing", function()
+            ngx_mock.var.http_content_type = nil
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" }
+            })
+            local headers = client:getMitigationRequestHeaders()
+            assert.are.equal("application/x-www-form-urlencoded", headers["content-type"])
         end)
 
         it("should include captcha cookie when present", function()

@@ -274,6 +274,50 @@ insulate("lua_resty_netacea", function()
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
 
+            it("should return HTTP_OK for checkpointSignalPath without proxying to origin", function()
+                cookies_mock.parseMitataCookie = spy.new(function()
+                    return {
+                        valid = true,
+                        user_id = "existing-user-id",
+                        data = {
+                            mat = "2",
+                            mit = "4",
+                            cap = "0"
+                        }
+                    }
+                end)
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    checkpointSignalPath = "/CustomCheck"
+                })
+                ngx_mock.var.uri = "/CustomCheck"
+
+                netacea:mitigate()
+
+                assert.spy(ngx_mock.exit).was.called_with(ngx_mock.OK)
+                assert.are.equal("ip_flagged,checkpoint_signal", ngx_mock.ctx.NetaceaState.bc_type)
+                assert.spy(protector_client_instance.checkReputation).was_not_called()
+                assert.spy(mitigation_mock.getBestMitigation).was_not_called()
+                assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
+                assert.is_nil(ngx_mock.header["Set-Cookie"])
+            end)
+
+            it("should keep checkpointSignalPath unset when omitted", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key"
+                })
+
+                assert.is_nil(netacea.checkpointSignalPath)
+            end)
+
             it("should inject the recommendation headers from a valid session", function()
                 cookies_mock.parseMitataCookie = spy.new(function()
                     return {

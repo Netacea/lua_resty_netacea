@@ -35,6 +35,17 @@ Constants['captchaStates'] = {
   COOKIEFAIL = '5'
 }
 
+Constants['checkpointStates'] = {
+  NONE = '0',
+  SIGNAL = '6',
+  POST = '7',
+  SERVE = 'a',
+  PASS = 'b',
+  FAIL = 'c',
+  COOKIEPASS = 'd',
+  COOKIEFAIL = 'e'
+}
+
 Constants['issueReasons'] = {
     NO_SESSION = 'no_session',
     EXPIRED_SESSION = 'expired_session',
@@ -72,6 +83,16 @@ Constants['captchaBcTypes'] = {
   ['3'] = 'captcha_fail',
   ['4'] = 'captcha_cookiepass',
   ['5'] = 'captcha_cookiefail'
+}
+
+Constants['checkpointBcTypes'] = {
+  ['6'] = 'checkpoint_signal',
+  ['7'] = 'checkpoint_post',
+  ['a'] = 'checkpoint_serve',
+  ['b'] = 'checkpoint_pass',
+  ['c'] = 'checkpoint_fail',
+  ['d'] = 'checkpoint_cookiepass',
+  ['e'] = 'checkpoint_cookiefail'
 }
 
 local function reversifyTable(table)
