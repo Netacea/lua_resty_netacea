@@ -201,10 +201,6 @@ function _N:handleSession()
 end
 
 function _N:refreshSession(reason)
-  if shouldSetCookies == nil then
-    shouldSetCookies = true
-  end
-
   local protector_result = ngx.ctx.NetaceaState.protector_result or {
     match = Constants['idTypes'].NONE,
     mitigate = Constants['mitigationTypes'].NONE,
