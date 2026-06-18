@@ -14,6 +14,12 @@ _N._TYPE = 'nginx'
 local ngx = require 'ngx'
 local cjson = require 'cjson'
 
+local function setNoCacheHeaders()
+  ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
+  ngx.header["Pragma"] = "no-cache"
+  ngx.header["Expires"] = "0"
+end
+
 local function getIntegrationMode(n)
   if n.mitigationEnabled then return n.mitigationType end
   if n.ingestEnabled then return 'INGEST' end
@@ -296,6 +302,7 @@ function _N:mitigate()
       parsed_cookie.data.mit or nil,
       Constants['checkpointStates'].SIGNAL
     )
+    setNoCacheHeaders()
     ngx.exit(ngx.OK)
     return
   end
