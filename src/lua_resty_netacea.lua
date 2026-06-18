@@ -363,6 +363,13 @@ function _N:mitigate()
       return
     end
 
+    if best_mitigation == 'flag' then
+      ngx.log(ngx.DEBUG, "NETACEA MITIGATE - flagging request with recommendation headers")
+      setInjectHeaders(protector_result)
+      self:refreshSession(parsed_cookie.reason)
+      return
+    end
+
     ngx.log(ngx.DEBUG, "NETACEA MITIGATE - no mitigation applied")
     self:refreshSession(parsed_cookie.reason)
   else
@@ -372,9 +379,11 @@ function _N:mitigate()
       mitigate = parsed_cookie.data.mit,
       captcha = parsed_cookie.data.cap
     }
-    if self.mitigationType == 'INJECT' then
+    local isFlagged = parsed_cookie.data.mit == Constants['mitigationTypes'].FLAGGED
+    if self.mitigationType == 'INJECT' or isFlagged then
       ngx.log(ngx.DEBUG,
-        "NETACEA INJECT - setting recommendation headers from session: match=", parsed_cookie.data.mat,
+        "NETACEA INJECT - setting recommendation headers from session: match=",
+        parsed_cookie.data.mat,
         ", mitigate=", parsed_cookie.data.mit,
         ", captcha=", parsed_cookie.data.cap)
       setInjectHeaders(ngx.ctx.NetaceaState.protector_result)

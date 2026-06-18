@@ -39,7 +39,19 @@ function _M.getBestMitigation(protector_result)
     return 'monetise'
   end
 
-  return 'block'
+  if (mitigate == Constants.mitigationTypes.FLAGGED) then
+    return 'flag'
+  end
+
+  if (mitigate == Constants.mitigationTypes.BLOCKED) then
+    return 'block'
+  end
+
+  if (mitigate == Constants.mitigationTypes.HARDBLOCKED) then
+    return 'block'
+  end
+
+  return nil
 end
 
 function _M.serveCaptcha(captchaBody)

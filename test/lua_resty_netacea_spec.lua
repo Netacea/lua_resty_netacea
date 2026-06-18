@@ -350,6 +350,75 @@ insulate("lua_resty_netacea", function()
                 assert.spy(mitigation_mock.getBestMitigation).was_not_called()
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
+
+            it("should inject the recommendation headers when best mitigation is flag", function()
+                protector_client_instance.checkReputation = spy.new(function()
+                    return {
+                        match = "2",
+                        mitigate = "4",
+                        captcha = "0",
+                        response = {
+                            body = ""
+                        }
+                    }
+                end)
+                mitigation_mock.getBestMitigation = spy.new(function()
+                    return "flag"
+                end)
+
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key"
+                })
+
+                netacea:mitigate()
+
+                assert.spy(ngx_mock.req.set_header).was.called_with("x-netacea-match", "2")
+                assert.spy(ngx_mock.req.set_header).was.called_with("x-netacea-mitigate", "4")
+                assert.spy(ngx_mock.req.set_header).was.called_with("x-netacea-captcha", "0")
+                assert.spy(cookies_mock.generateNewCookieValue).was.called(1)
+                assert.spy(mitigation_mock.serveCaptcha).was_not_called()
+                assert.spy(mitigation_mock.serveBlock).was_not_called()
+                assert.spy(mitigation_mock.serveMonetisationRedirect).was_not_called()
+                assert.spy(mitigation_mock.serveMonetisationFallback).was_not_called()
+                assert.spy(ngx_mock.exit).was_not_called()
+            end)
+
+            it("should inject the recommendation headers from a valid flagged session without calling the protector api", function()
+                cookies_mock.parseMitataCookie = spy.new(function()
+                    return {
+                        valid = true,
+                        user_id = "existing-user-id",
+                        data = {
+                            mat = "2",
+                            mit = "4",
+                            cap = "0"
+                        }
+                    }
+                end)
+                ngx_mock.var.cookie__mitata = "existing-session-cookie"
+
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key"
+                })
+
+                netacea:mitigate()
+
+                assert.spy(ngx_mock.req.set_header).was.called_with("x-netacea-match", "2")
+                assert.spy(ngx_mock.req.set_header).was.called_with("x-netacea-mitigate", "4")
+                assert.spy(ngx_mock.req.set_header).was.called_with("x-netacea-captcha", "0")
+                assert.spy(protector_client_instance.checkReputation).was_not_called()
+                assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
+                assert.spy(mitigation_mock.getBestMitigation).was_not_called()
+                assert.spy(ngx_mock.exit).was_not_called()
+            end)
         end)
 
         describe("cookie encryption key config", function()
