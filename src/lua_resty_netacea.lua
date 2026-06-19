@@ -249,15 +249,18 @@ function _N:handleCaptcha()
   ngx.ctx.NetaceaState.grace_period = -1000
   ngx.log(ngx.DEBUG, "NETACEA CAPTCHA - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
 
-  if protector_result.captcha == Constants['captchaStates'].PASS then
+  -- Refresh session only when the captcha verification succeeded and this wasn't a checkpoint post
+  local isCheckpointPost = protector_result.captcha ~= Constants['checkpointStates'].POST
+  if protector_result.exit_status == 200 and isCheckpointPost then
     self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
   end
-  if protector_result.captcha == Constants['checkpointStates'].PASS then
-    self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
+
+  if protector_result.response and protector_result.response.body then
+    ngx.print(protector_result.response.body)
   end
+
   ngx.exit(protector_result.exit_status)
 end
-
 
 function _N:refreshIngestSession()
   local parsed_cookie = self:handleSession()

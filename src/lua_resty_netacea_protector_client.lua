@@ -103,16 +103,6 @@ function ProtectorClient:validateCaptcha(captcha_data)
     'Netacea captcha validation response: match=' .. idType
     .. ', mitigate=' .. mitigationType .. ', captcha=' .. captchaState)
 
-  local exit_status = ngx.HTTP_FORBIDDEN
-  if (captchaState == constants['captchaStates'].PASS) then
-    exit_status = ngx.HTTP_OK
-  end
-  if (captchaState == constants['checkpointStates'].POST) then
-    exit_status = ngx.HTTP_OK
-  end
-  if (captchaState == constants['checkpointStates'].PASS) then
-    exit_status = ngx.HTTP_OK
-  end
   return {
       response = {
           status = res.status,
@@ -122,10 +112,9 @@ function ProtectorClient:validateCaptcha(captcha_data)
       match = idType,
       mitigate = mitigationType,
       captcha = captchaState,
-      exit_status = exit_status,
+      exit_status = res.status,
       captcha_cookie = res.headers['X-Netacea-MitATACaptcha-Value'] or nil
   }
 end
-
 
 return ProtectorClient

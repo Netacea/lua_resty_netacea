@@ -24,6 +24,7 @@ insulate("lua_resty_netacea", function()
                 },
                 header = {},
                 log = spy.new(function() end),
+                print = spy.new(function() end),
                 exit = spy.new(function() end),
                 req = {
                     read_body = spy.new(function() end),
@@ -601,27 +602,43 @@ insulate("lua_resty_netacea", function()
                 })
             end
 
-            it("should not set session or captcha cookies when captcha fails", function()
+            it("should NOT refresh cookies when captcha fails", function()
                 protector_client_instance.validateCaptcha = spy.new(function()
                     return {
                         match = "0",
                         mitigate = "0",
                         captcha = "3",
                         exit_status = 403,
-                        captcha_cookie = "failed-captcha-cookie"
+                        captcha_cookie = "failed-captcha-cookie",
+                        response = {
+                            body = "Unauthorized"
+                        }
                     }
                 end)
                 local netacea = new_mitigation_enabled_netacea()
 
                 netacea:handleCaptcha()
 
-                assert.is_nil(ngx_mock.header["Set-Cookie"])
+                assert.are.same({}, ngx_mock.header["Set-Cookie"] or {})
                 assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
                 assert.spy(cookies_mock.encrypt).was_not_called()
+                assert.spy(ngx_mock.print).was.called_with("Unauthorized")
                 assert.spy(ngx_mock.exit).was.called_with(403)
             end)
 
             it("should refresh session and captcha cookies when captcha passes", function()
+                protector_client_instance.validateCaptcha = spy.new(function()
+                    return {
+                        match = "1",
+                        mitigate = "1",
+                        captcha = "2",
+                        exit_status = 200,
+                        captcha_cookie = "captcha-cookie-value",
+                        response = {
+                            body = "Captcha OK"
+                        }
+                    }
+                end)
                 local netacea = new_mitigation_enabled_netacea()
 
                 netacea:handleCaptcha()
@@ -635,6 +652,7 @@ insulate("lua_resty_netacea", function()
                     "decoded-test-cookie-encryption-key",
                     "captcha-cookie-value"
                 )
+                assert.spy(ngx_mock.print).was.called_with("Captcha OK")
                 assert.spy(ngx_mock.exit).was.called_with(200)
             end)
         end)
