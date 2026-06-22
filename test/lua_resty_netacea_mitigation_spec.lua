@@ -220,12 +220,12 @@ describe("lua_resty_netacea_mitigation", function()
             assert.are.equal('block', mitigation.getBestMitigation(result))
         end)
 
-        it("should return block when mitigate is FLAGGED", function()
+        it("should return flag when mitigate is FLAGGED", function()
             local result = {
                 mitigate = Constants.mitigationTypes.FLAGGED,
                 captcha = Constants.captchaStates.NONE
             }
-            assert.are.equal('block', mitigation.getBestMitigation(result))
+            assert.are.equal('flag', mitigation.getBestMitigation(result))
         end)
     end)
 end)

@@ -1,60 +1,52 @@
 # lua_resty_netacea
 
-An Openresty module for easy integration of Netacea services. This repo is for developing the package. The package can be accessed by the Luarocks package management platform. See the Netacea documentation for making use of the module.
+An Openresty module for easy integration of Netacea services. This repo is for
+developing the package. The package can be accessed by the Luarocks package
+management platform. See the Netacea documentation for making use of the module.
 
 ## Published package
 
-The Netacea package is available on the Luarocks package manager. Publishing is handled by the Netacea team.
+The Netacea package is available on the Luarocks package manager.
+Publishing is handled by the Netacea team.
+
+## Contributing to this Repository
+
+If you wish to make a contribution to this repository, please see
+[CONTRIBUTING.md](/home/user/github/lua_resty_netacea/CONTRIBUTING.md).
 
 ## Docker images
 
-The Dockerfile contains a multi-stage build, including:
+This repository includes Dockerfiles and Docker Compose services for running the
+existing code without making any changes.
 
-| Stage name | Based on | Description |
-| -- | -- | -- |
-| base  |  openresty/openresty:noble | Base image of Openresty with updated packages around openSSL |
-| build | base | Working Openresty instance with Netacea plugin installed using luarocks and rockspec file |
-| test | build | Lua packages installed for testing and linting. Command overridden to run unit tests |
-| lint | test | Command overridden to run luacheck linter and output results |
+### Prerequisites
 
-The docker compose file is used to mount local files to the right place in the image to support development.
+- Docker Engine or Docker Desktop
+- Docker Compose
+- A local `.env` file if you want to supply Netacea runtime values
 
-### Environment variables
+### Build the image
 
-The Docker Compose services that run NGINX load Netacea configuration from a local `.env` file.
-Create it from the example file, then fill in the values provided by the Netacea Solutions Engineering team:
+To build the OpenResty image used by the `resty` service:
 
 ```sh
-cp .env.example .env
+docker compose build resty
 ```
 
-The `.env` file is ignored by git because it can contain sensitive values such as API keys, cookie encryption keys, and Kinesis credentials.
-Keep `.env.example` updated when adding or removing configuration variables.
+This uses [`Dockerfile`](/home/user/github/lua_resty_netacea/Dockerfile) and
+builds the package from the checked-in rockspec and source files.
 
-### Run development version
+### Run the module locally
 
-1. Create `./.env` from `./.env.example` and set the Netacea environment variables.
-2. Update `./src/conf/nginx.conf` to include server configuration. See "Configuration" below.
-3. `docker compose up --build resty`
-4. Access [](http://localhost:8080)
+The `resty` service starts OpenResty with the module loaded and exposes it on
+`http://localhost:8080`:
 
-### Run tests
+```sh
+docker compose up --build resty
+```
 
-#### Unit tests
-
-##### In dev container
-
-Without coverage report: `./run_lua_tests.sh`
-With coverage report (sent to stdout) `export LUACOV_REPORT=1 && ./run_lua_tests.sh`
-
-##### Docker compose
-
-Without coverage report: `docker compose run --rm --build test`
-With coverage report (sent to stdout) `docker compose run -e LUACOV_REPORT=1 --build test [> output.html]`
-
-#### Linter
-
-`docker compose run --rm --build lint`
+Before starting it, create a `.env` file from `.env.example` and set the
+runtime values required by your selected protection mode.
 
 ## Configuration
 
@@ -136,6 +128,7 @@ NETACEA_PROTECTOR_API_URL=https://your-protector-api-url
 | `NETACEA_CAPTCHA_COOKIE_ATTRIBUTES` | `Max-Age=86400; Path=/;` |
 | `NETACEA_REAL_IP_HEADER`            | `""`                     |
 | `NETACEA_REAL_IP_HEADER_INDEX`      | unset                    |
+| `NETACEA_CHECKPOINT_SIGNAL_PATH`    | unset                    |
 | `NETACEA_KINESIS_ACCESS_KEY`        | `""`                     |
 | `NETACEA_KINESIS_SECRET_KEY`        | `""`                     |
 | `NETACEA_KINESIS_STREAM_NAME`       | `""`                     |

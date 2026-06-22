@@ -30,6 +30,7 @@ end
 
 function ProtectorClient:getMitigationRequestHeaders()
     local NetaceaState = ngx.ctx.NetaceaState
+    local content_type = ngx.var and ngx.var.http_content_type or nil
 
     local cookie = ''
     if NetaceaState ~= nil and NetaceaState.captcha_cookie ~= nil then
@@ -38,7 +39,7 @@ function ProtectorClient:getMitigationRequestHeaders()
 
     local headers = {
         ["x-netacea-api-key"] = self.apiKey,
-        ["content-type"] = 'application/x-www-form-urlencoded',
+        ["content-type"] = content_type or 'application/x-www-form-urlencoded',
         ["cookie"] = cookie,
         ["user-agent"] = NetaceaState.user_agent or '',
         ["x-netacea-client-ip"] = NetaceaState.client or '',
@@ -78,7 +79,7 @@ function ProtectorClient:checkReputation()
 end
 
 function ProtectorClient:validateCaptcha(captcha_data)
-    local hc = createHttpConnection()
+  local hc = createHttpConnection()
 
   local headers = self:getMitigationRequestHeaders()
 
@@ -102,24 +103,18 @@ function ProtectorClient:validateCaptcha(captcha_data)
     'Netacea captcha validation response: match=' .. idType
     .. ', mitigate=' .. mitigationType .. ', captcha=' .. captchaState)
 
-  local exit_status = ngx.HTTP_FORBIDDEN
-  if (captchaState == constants['captchaStates'].PASS) then
-    exit_status = ngx.HTTP_OK
-
-  end
-    return {
-        response = {
-            status = res.status,
-            body = res.body,
-            headers = res.headers
-        },
-        match = idType,
-        mitigate = mitigationType,
-        captcha = captchaState,
-        exit_status = exit_status,
-        captcha_cookie = res.headers['X-Netacea-MitATACaptcha-Value'] or nil
-    }
+  return {
+      response = {
+          status = res.status,
+          body = res.body,
+          headers = res.headers
+      },
+      match = idType,
+      mitigate = mitigationType,
+      captcha = captchaState,
+      exit_status = res.status,
+      captcha_cookie = res.headers['X-Netacea-MitATACaptcha-Value'] or nil
+  }
 end
-
 
 return ProtectorClient
