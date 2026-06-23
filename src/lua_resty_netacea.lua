@@ -111,6 +111,8 @@ function _N:new(options)
   n.userIdKey = utils.parseOption(options.userIdKey, '')
   -- global:optional:checkpointSignalPath
   n.checkpointSignalPath = utils.parseOption(options.checkpointSignalPath, nil)
+  -- global:optional:netaceaCaptchaPath
+  n.netaceaCaptchaPath = utils.normalizeRelativePath(utils.parseOption(options.netaceaCaptchaPath, nil))
   -- global:required:apiKey
   n.apiKey = utils.parseOption(options.apiKey, nil)
   if not n.apiKey then
@@ -290,6 +292,19 @@ function _N:mitigate()
     return nil
   end
   local parsed_cookie = self:handleSession()
+
+  if self.netaceaCaptchaPath and ngx.var.uri == self.netaceaCaptchaPath then
+    local trackingId = ngx.var.arg_trackingId
+    --TODO: make this more lenient to all JWE tokens
+    if not utils.isSafeTrackingId(trackingId) then
+      trackingId = nil
+    end
+    local captcha_result = self.protectorClient:getCaptchaPage(trackingId)
+    if captcha_result then
+      mitigation.serveCaptcha(captcha_result.response.body)
+    end
+    return
+  end
 
   -- Return early on requests to the checkpoint signal path
   local signalPathEnabled = (self.checkpointSignalPath or '') ~= ''

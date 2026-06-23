@@ -66,6 +66,27 @@ function M.parseOption(option, defaultValue)
   return option
 end
 
+function M.normalizeRelativePath(path)
+  if type(path) ~= 'string' then return nil end
+
+  path = path:match("^%s*(.-)%s*$")
+  if path == '' then return nil end
+  if path:sub(1, 1) ~= '/' then
+    path = '/' .. path
+  end
+
+  if not path:match("^/[A-Za-z0-9/]*$") then
+    return nil
+  end
+
+  return path
+end
+
+function M.isSafeTrackingId(value)
+  if type(value) ~= 'string' then return false end
+  return value:match("^[A-Za-z0-9._~-]+$") ~= nil
+end
+
 function M.env(name, defaultValue)
   return os.getenv(name) or defaultValue
 end

@@ -412,6 +412,52 @@ describe("netacea_utils", function()
         end)
     end)
 
+    describe("normalizeRelativePath", function()
+        it("should return a valid absolute path unchanged", function()
+            assert.are.equal("/captcha", utils.normalizeRelativePath("/captcha"))
+        end)
+
+        it("should prepend a leading slash before validation", function()
+            assert.are.equal("/captcha", utils.normalizeRelativePath("captcha"))
+        end)
+
+        it("should preserve case sensitivity", function()
+            assert.are.equal("/Captcha", utils.normalizeRelativePath("Captcha"))
+        end)
+
+        it("should allow nested relative paths", function()
+            assert.are.equal("/my/captcha", utils.normalizeRelativePath("/my/captcha"))
+        end)
+
+        it("should reject invalid characters", function()
+            assert.is_nil(utils.normalizeRelativePath("/captcha-page"))
+            assert.is_nil(utils.normalizeRelativePath("/captcha.html"))
+            assert.is_nil(utils.normalizeRelativePath("/captcha?"))
+            assert.is_nil(utils.normalizeRelativePath("/captcha#"))
+            assert.is_nil(utils.normalizeRelativePath("/captcha test"))
+        end)
+
+        it("should reject empty and non-string values", function()
+            assert.is_nil(utils.normalizeRelativePath(""))
+            assert.is_nil(utils.normalizeRelativePath(nil))
+        end)
+    end)
+
+    describe("isSafeTrackingId", function()
+        it("should accept parser-safe tracking ids", function()
+            assert.is_true(utils.isSafeTrackingId("e334cc64-6cc2-4193-92dd-237e38bab4a7"))
+            assert.is_true(utils.isSafeTrackingId("abcDEF123._~-"))
+        end)
+
+        it("should reject values that can break url or query parsing", function()
+            assert.is_false(utils.isSafeTrackingId("abc def"))
+            assert.is_false(utils.isSafeTrackingId("abc?def"))
+            assert.is_false(utils.isSafeTrackingId("abc&def"))
+            assert.is_false(utils.isSafeTrackingId("abc%def"))
+            assert.is_false(utils.isSafeTrackingId(nil))
+        end)
+    end)
+
     describe("env", function()
         local original_getenv
         local env_values

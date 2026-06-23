@@ -17,6 +17,12 @@ local function createHttpConnection()
   return hc
 end
 
+local function appendTrackingId(url, trackingId)
+    if not trackingId then return url end
+    local separator = url:find('?', 1, true) and '&' or '?'
+    return url .. separator .. "trackingId=" .. trackingId
+end
+
 function ProtectorClient:new(options)
     local n = {}
     setmetatable(n, self)
@@ -114,6 +120,30 @@ function ProtectorClient:validateCaptcha(captcha_data)
       captcha = captchaState,
       exit_status = res.status,
       captcha_cookie = res.headers['X-Netacea-MitATACaptcha-Value'] or nil
+  }
+end
+
+function ProtectorClient:getCaptchaPage(trackingId)
+  local hc = createHttpConnection()
+
+  local headers = self:getMitigationRequestHeaders()
+  self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
+
+  local res, err = hc:request_uri(
+    appendTrackingId(self.mitigationEndpoint[self.endpointIndex + 1] .. '/captcha', trackingId),
+    {
+      method = 'GET',
+      headers = headers
+    }
+  )
+  if (err) then return nil end
+
+  return {
+    response = {
+      status = res.status,
+      body = res.body,
+      headers = res.headers
+    }
   }
 end
 

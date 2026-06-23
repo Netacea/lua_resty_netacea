@@ -409,4 +409,31 @@ describe("lua_resty_netacea_protector_client", function()
             assert.are.equal("response body", result.response.body)
         end)
     end)
+
+    describe("getCaptchaPage", function()
+        it("should make a GET request to the captcha endpoint", function()
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" }
+            })
+            client:getCaptchaPage("e334cc64-6cc2-4193-92dd-237e38bab4a7")
+            assert.spy(http_mock_instance.request_uri).was.called(1)
+            local call_args = http_mock_instance.request_uri.calls[1]
+            assert.are.equal(
+                "https://endpoint1.example.com/captcha?trackingId=e334cc64-6cc2-4193-92dd-237e38bab4a7",
+                call_args.vals[2]
+            )
+            assert.are.equal("GET", call_args.vals[3].method)
+        end)
+
+        it("should omit trackingId when not provided", function()
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" }
+            })
+            client:getCaptchaPage(nil)
+            local call_args = http_mock_instance.request_uri.calls[1]
+            assert.are.equal("https://endpoint1.example.com/captcha", call_args.vals[2])
+        end)
+    end)
 end)

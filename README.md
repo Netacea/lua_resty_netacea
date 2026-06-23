@@ -116,22 +116,23 @@ NETACEA_PROTECTOR_API_URL=https://your-protector-api-url
 
 | Environment variable                | Default                  |
 | ----------------------------------- | ------------------------ |
-| `NETACEA_PROTECTION_MODE`           | `INGEST`                 |
-| `NETACEA_INGEST_ENABLED`            | `true`                   |
-| `NETACEA_PROTECTOR_API_URL`         | `""`                     |
 | `NETACEA_API_KEY`                   | none                     |
-| `NETACEA_COOKIE_ENCRYPTION_KEY`     | none                     |
-| `NETACEA_SECRET_KEY`                | none                     |
-| `NETACEA_COOKIE_NAME`               | `_mitata`                |
-| `NETACEA_CAPTCHA_COOKIE_NAME`       | `_mitatacaptcha`         |
-| `NETACEA_COOKIE_ATTRIBUTES`         | `Max-Age=86400; Path=/;` |
 | `NETACEA_CAPTCHA_COOKIE_ATTRIBUTES` | `Max-Age=86400; Path=/;` |
-| `NETACEA_REAL_IP_HEADER`            | `""`                     |
-| `NETACEA_REAL_IP_HEADER_INDEX`      | unset                    |
+| `NETACEA_CAPTCHA_COOKIE_NAME`       | `_mitatacaptcha`         |
+| `NETACEA_CAPTCHA_PATH`              | unset                    |
 | `NETACEA_CHECKPOINT_SIGNAL_PATH`    | unset                    |
+| `NETACEA_COOKIE_ATTRIBUTES`         | `Max-Age=86400; Path=/;` |
+| `NETACEA_COOKIE_ENCRYPTION_KEY`     | none                     |
+| `NETACEA_COOKIE_NAME`               | `_mitata`                |
+| `NETACEA_INGEST_ENABLED`            | `true`                   |
 | `NETACEA_KINESIS_ACCESS_KEY`        | `""`                     |
-| `NETACEA_KINESIS_SECRET_KEY`        | `""`                     |
-| `NETACEA_KINESIS_STREAM_NAME`       | `""`                     |
-| `NETACEA_KINESIS_REGION`            | `eu-west-1`              |
 | `NETACEA_KINESIS_BATCH_SIZE`        | `25`                     |
 | `NETACEA_KINESIS_BATCH_TIMEOUT`     | `1.0`                    |
+| `NETACEA_KINESIS_REGION`            | `eu-west-1`              |
+| `NETACEA_KINESIS_SECRET_KEY`        | `""`                     |
+| `NETACEA_KINESIS_STREAM_NAME`       | `""`                     |
+| `NETACEA_PROTECTION_MODE`           | `INGEST`                 |
+| `NETACEA_PROTECTOR_API_URL`         | `""`                     |
+| `NETACEA_REAL_IP_HEADER_INDEX`      | unset                    |
+| `NETACEA_REAL_IP_HEADER`            | `""`                     |
+| `NETACEA_SECRET_KEY`                | none                     |
