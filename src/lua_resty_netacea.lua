@@ -41,6 +41,16 @@ local function setInjectHeaders(protector_result)
   return idType, mitigationType, captchaState
 end
 
+local function serveCaptchaFailOpen(body, options)
+  local ok, err = pcall(mitigation.serveCaptcha, body, options)
+  if not ok then
+    ngx.log(ngx.WARN, "NETACEA MITIGATE - captcha response failed open: ", err)
+    return false
+  end
+
+  return true
+end
+
 function _N:new(options)
   local n = {}
   setmetatable(n, self)
@@ -113,6 +123,8 @@ function _N:new(options)
   n.checkpointSignalPath = utils.parseOption(options.checkpointSignalPath, nil)
   -- global:optional:netaceaCaptchaPath
   n.netaceaCaptchaPath = utils.normalizeRelativePath(utils.parseOption(options.netaceaCaptchaPath, nil))
+  -- global:optional:enableCaptchaContentNegotiation
+  n.enableCaptchaContentNegotiation = options.enableCaptchaContentNegotiation == true
   -- global:required:apiKey
   n.apiKey = utils.parseOption(options.apiKey, nil)
   if not n.apiKey then
@@ -134,7 +146,8 @@ function _N:new(options)
   if n.mitigationEnabled then
     n.protectorClient = protector_client:new{
       apiKey = n.apiKey,
-      mitigationEndpoint = n.mitigationEndpoint
+      mitigationEndpoint = n.mitigationEndpoint,
+      enableCaptchaContentNegotiation = n.enableCaptchaContentNegotiation
     }
   end
 
@@ -301,7 +314,12 @@ function _N:mitigate()
     end
     local captcha_result = self.protectorClient:getCaptchaPage(trackingId)
     if captcha_result then
-      mitigation.serveCaptcha(captcha_result.response.body)
+      serveCaptchaFailOpen(captcha_result.response.body, {
+        enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
+        netaceaCaptchaPath = self.netaceaCaptchaPath,
+        captchaPath = self.netaceaCaptchaPath,
+        trackingId = trackingId
+      })
     end
     return
   end
@@ -347,7 +365,11 @@ function _N:mitigate()
       local captchaBody = protector_result.response.body
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      mitigation.serveCaptcha(captchaBody)
+      serveCaptchaFailOpen(captchaBody, {
+        enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
+        netaceaCaptchaPath = self.netaceaCaptchaPath,
+        captchaPath = self.netaceaCaptchaPath
+      })
       return
     end
 
@@ -356,7 +378,11 @@ function _N:mitigate()
       local checkpointBody = protector_result.response.body
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      mitigation.serveCaptcha(checkpointBody)
+      serveCaptchaFailOpen(checkpointBody, {
+        enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
+        netaceaCaptchaPath = self.netaceaCaptchaPath,
+        captchaPath = self.netaceaCaptchaPath
+      })
       return
     end
 

@@ -14,11 +14,21 @@ describe("lua_resty_netacea_mitigation", function()
             HTTP_OK = 200,
             status = 0,
             header = {},
+            var = {
+                scheme = "https",
+                http_host = "example.com",
+                http_accept = "text/html"
+            },
             print = spy.new(function() end),
             exit = spy.new(function() end)
         }
 
         package.loaded['ngx'] = ngx_mock
+        package.loaded['cjson.safe'] = {
+            encode = function(value)
+                return require("cjson").encode(value)
+            end
+        }
         package.loaded['lua_resty_netacea_mitigation'] = nil
         mitigation = require('lua_resty_netacea_mitigation')
         Constants = require('lua_resty_netacea_constants')
@@ -27,6 +37,7 @@ describe("lua_resty_netacea_mitigation", function()
     after_each(function()
         package.loaded['lua_resty_netacea_mitigation'] = nil
         package.loaded['ngx'] = nil
+        package.loaded['cjson.safe'] = nil
     end)
 
     describe("serveCaptcha", function()
@@ -53,6 +64,94 @@ describe("lua_resty_netacea_mitigation", function()
         it("should exit with HTTP_OK", function()
             mitigation.serveCaptcha("<html>captcha</html>")
             assert.spy(ngx_mock.exit).was.called_with(200)
+        end)
+
+        it("should serve json when html is not accepted but json is accepted", function()
+            ngx_mock.var.http_accept = "application/json"
+
+            mitigation.serveCaptcha("<html>captcha</html>", {
+                enableCaptchaContentNegotiation = true,
+                netaceaCaptchaPath = "/captcha",
+                captchaPath = "/getCaptcha",
+                trackingId = "a1a16640-e1f0-4de4-a3a6-140c45181383"
+            })
+
+            assert.are.equal("application/json", ngx_mock.header["content-type"])
+            assert.spy(ngx_mock.print).was.called_with(
+                '{"captchaRelativeURL":"/getCaptcha?trackingId=a1a16640-e1f0-4de4-a3a6-140c45181383","captchaAbsoluteURL":"https://example.com/getCaptcha?trackingId=a1a16640-e1f0-4de4-a3a6-140c45181383"}'
+            )
+        end)
+
+        it("should keep html when text/html is accepted", function()
+            ngx_mock.var.http_accept = "text/html,application/json"
+
+            mitigation.serveCaptcha("<html>captcha</html>", {
+                enableCaptchaContentNegotiation = true,
+                captchaPath = "/getCaptcha",
+                trackingId = "a1a16640-e1f0-4de4-a3a6-140c45181383"
+            })
+
+            assert.are.equal("text/html", ngx_mock.header["content-type"])
+            assert.spy(ngx_mock.print).was.called_with("<html>captcha</html>")
+        end)
+
+        it("should keep html when negotiation is disabled", function()
+            ngx_mock.var.http_accept = "application/json"
+
+            mitigation.serveCaptcha("<html>captcha</html>", {
+                enableCaptchaContentNegotiation = false,
+                captchaPath = "/getCaptcha",
+                trackingId = "a1a16640-e1f0-4de4-a3a6-140c45181383"
+            })
+
+            assert.are.equal("text/html", ngx_mock.header["content-type"])
+            assert.spy(ngx_mock.print).was.called_with("<html>captcha</html>")
+        end)
+
+        it("should keep html when no captcha path is configured", function()
+            ngx_mock.var.http_accept = "application/json"
+
+            mitigation.serveCaptcha("<html>captcha</html>", {
+                enableCaptchaContentNegotiation = true,
+                trackingId = "a1a16640-e1f0-4de4-a3a6-140c45181383"
+            })
+
+            assert.are.equal("text/html", ngx_mock.header["content-type"])
+            assert.spy(ngx_mock.print).was.called_with("<html>captcha</html>")
+        end)
+
+        it("should build captcha urls from upstream trackingId json", function()
+            ngx_mock.var.http_accept = "application/json"
+            ngx_mock.var.scheme = "http"
+            ngx_mock.var.http_host = "localhost:8080"
+
+            mitigation.serveCaptcha('{"trackingId":"b0343c30-a382-42ad-9d65-fdb005fef054"}', {
+                enableCaptchaContentNegotiation = true,
+                netaceaCaptchaPath = "/captcha",
+                captchaPath = "/getCaptcha"
+            })
+
+            assert.are.equal("application/json", ngx_mock.header["content-type"])
+            assert.spy(ngx_mock.print).was.called_with(
+                '{"captchaRelativeURL":"/getCaptcha?trackingId=b0343c30-a382-42ad-9d65-fdb005fef054","captchaAbsoluteURL":"http://localhost:8080/getCaptcha?trackingId=b0343c30-a382-42ad-9d65-fdb005fef054"}'
+            )
+        end)
+
+        it("should error when negotiated json is missing trackingId", function()
+            ngx_mock.var.http_accept = "application/json"
+
+            local ok, err = pcall(function()
+                mitigation.serveCaptcha('{"captchaURL":"https://example.com/captcha"}', {
+                    enableCaptchaContentNegotiation = true,
+                    netaceaCaptchaPath = "/captcha",
+                    captchaPath = "/getCaptcha"
+                })
+            end)
+
+            assert.is_false(ok)
+            assert.is_truthy(tostring(err):find("missing trackingId", 1, true))
+            assert.spy(ngx_mock.print).was_not_called()
+            assert.spy(ngx_mock.exit).was_not_called()
         end)
     end)
 

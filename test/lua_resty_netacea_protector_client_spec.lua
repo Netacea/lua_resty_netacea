@@ -74,10 +74,12 @@ describe("lua_resty_netacea_protector_client", function()
         it("should create a new instance with provided options", function()
             local client = ProtectorClient:new({
                 apiKey = "test-api-key",
-                mitigationEndpoint = { "https://endpoint1.example.com" }
+                mitigationEndpoint = { "https://endpoint1.example.com" },
+                enableCaptchaContentNegotiation = true
             })
             assert.are.equal("test-api-key", client.apiKey)
             assert.are.same({ "https://endpoint1.example.com" }, client.mitigationEndpoint)
+            assert.is_true(client.enableCaptchaContentNegotiation)
             assert.are.equal(0, client.endpointIndex)
         end)
 
@@ -159,6 +161,39 @@ describe("lua_resty_netacea_protector_client", function()
             })
             local headers = client:getMitigationRequestHeaders()
             assert.are.equal("", headers["x-netacea-userid"])
+        end)
+
+        it("should send captcha content type when negotiation is enabled and application/json is accepted", function()
+            ngx_mock.var.http_accept = "application/json"
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" },
+                enableCaptchaContentNegotiation = true
+            })
+            local headers = client:getMitigationRequestHeaders()
+            assert.are.equal("application/json", headers["x-netacea-captcha-content-type"])
+        end)
+
+        it("should not send captcha content type when text/html is accepted", function()
+            ngx_mock.var.http_accept = "text/html,application/json"
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" },
+                enableCaptchaContentNegotiation = true
+            })
+            local headers = client:getMitigationRequestHeaders()
+            assert.is_nil(headers["x-netacea-captcha-content-type"])
+        end)
+
+        it("should not send captcha content type when negotiation is disabled", function()
+            ngx_mock.var.http_accept = "application/json"
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" },
+                enableCaptchaContentNegotiation = false
+            })
+            local headers = client:getMitigationRequestHeaders()
+            assert.is_nil(headers["x-netacea-captcha-content-type"])
         end)
     end)
 
