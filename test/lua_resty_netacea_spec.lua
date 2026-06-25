@@ -29,6 +29,7 @@ insulate("lua_resty_netacea", function()
                 req = {
                     read_body = spy.new(function() end),
                     get_body_data = spy.new(function() return "captcha-response" end),
+                    get_body_file = spy.new(function() return nil end),
                     set_header = spy.new(function() end)
                 },
                 DEBUG = 7,
@@ -925,6 +926,72 @@ insulate("lua_resty_netacea", function()
                 )
                 assert.spy(ngx_mock.print).was.called_with("Captcha OK")
                 assert.spy(ngx_mock.exit).was.called_with(200)
+            end)
+
+            it("should read captcha request bodies from the temporary file when needed", function()
+                local body_file = os.tmpname()
+                local file = assert(io.open(body_file, "wb"))
+                file:write("captcha-from-file")
+                file:close()
+
+                ngx_mock.req.get_body_data = spy.new(function()
+                    return nil
+                end)
+                ngx_mock.req.get_body_file = spy.new(function()
+                    return body_file
+                end)
+
+                local captured_body
+                protector_client_instance.validateCaptcha = spy.new(function(_, body)
+                    captured_body = body
+                    return {
+                        match = "1",
+                        mitigate = "1",
+                        captcha = "2",
+                        exit_status = 200,
+                        captcha_cookie = nil,
+                        response = {
+                            body = "Captcha OK"
+                        }
+                    }
+                end)
+
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.are.equal("captcha-from-file", captured_body)
+                os.remove(body_file)
+            end)
+
+            it("should return nil captcha body when the body file cannot be read", function()
+                ngx_mock.req.get_body_data = spy.new(function()
+                    return nil
+                end)
+                ngx_mock.req.get_body_file = spy.new(function()
+                    return "/tmp/definitely-not-a-real-body-file"
+                end)
+
+                local captured_body
+                protector_client_instance.validateCaptcha = spy.new(function(_, body)
+                    captured_body = body
+                    return {
+                        match = "1",
+                        mitigate = "1",
+                        captcha = "2",
+                        exit_status = 200,
+                        captcha_cookie = nil,
+                        response = {
+                            body = "Captcha OK"
+                        }
+                    }
+                end)
+
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.is_nil(captured_body)
             end)
         end)
     end)

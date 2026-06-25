@@ -51,6 +51,31 @@ local function serveCaptchaFailOpen(body, options)
   return true
 end
 
+local function readRequestBody()
+  ngx.req.read_body()
+
+  local body = ngx.req.get_body_data()
+  if body ~= nil then
+    return body
+  end
+
+  local body_file = ngx.req.get_body_file()
+  if not body_file then
+    return nil
+  end
+
+  local file, err = io.open(body_file, "rb")
+  if not file then
+    ngx.log(ngx.WARN, "NETACEA CAPTCHA - unable to read request body file: ", err)
+    return nil
+  end
+
+  local data = file:read("*a")
+  file:close()
+
+  return data
+end
+
 function _N:new(options)
   local n = {}
   setmetatable(n, self)
@@ -257,8 +282,7 @@ end
 function _N:handleCaptcha()
   self:handleSession()
 
-  ngx.req.read_body()
-  local captcha_data = ngx.req.get_body_data()
+  local captcha_data = readRequestBody()
   local protector_result = self.protectorClient:validateCaptcha(captcha_data)
   ngx.ctx.NetaceaState.protector_result = protector_result
   ngx.ctx.NetaceaState.grace_period = -1000
