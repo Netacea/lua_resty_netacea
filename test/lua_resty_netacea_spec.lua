@@ -524,6 +524,17 @@ insulate("lua_resty_netacea", function()
             end)
 
             it("should serve captcha on the configured captcha path with valid trackingId", function()
+                cookies_mock.parseMitataCookie = spy.new(function()
+                    return {
+                        valid = true,
+                        user_id = "existing-user-id",
+                        data = {
+                            mat = "2",
+                            mit = "4",
+                            cap = "0"
+                        }
+                    }
+                end)
                 protector_client_instance.getCaptchaPage = spy.new(function(_, trackingId)
                     assert.are.equal("e334cc64-6cc2-4193-92dd-237e38bab4a7", trackingId)
                     return {
