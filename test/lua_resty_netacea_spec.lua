@@ -76,6 +76,21 @@ insulate("lua_resty_netacea", function()
                     if value == nil then return default end
                     return value
                 end,
+                normalizeRelativePath = function(path)
+                    if type(path) ~= 'string' then return nil end
+                    path = path:match("^%s*(.-)%s*$")
+                    if path == '' then return nil end
+                    if path:sub(1, 1) ~= '/' then
+                        path = '/' .. path
+                    end
+                    if not path:match("^/[A-Za-z0-9/]*$") then
+                        return nil
+                    end
+                    return path
+                end,
+                isSafeTrackingId = function(value)
+                    return type(value) == 'string' and value:match("^[A-Za-z0-9._~-]+$") ~= nil
+                end,
                 getIpAddress = spy.new(function()
                     return "127.0.0.1"
                 end)
@@ -319,6 +334,32 @@ insulate("lua_resty_netacea", function()
                 assert.is_nil(netacea.checkpointSignalPath)
             end)
 
+            it("should normalize a valid netaceaCaptchaPath and keep matching case-sensitive", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    netaceaCaptchaPath = "Captcha/Path"
+                })
+
+                assert.are.equal("/Captcha/Path", netacea.netaceaCaptchaPath)
+            end)
+
+            it("should disable an invalid netaceaCaptchaPath", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    netaceaCaptchaPath = "/captcha-path"
+                })
+
+                assert.is_nil(netacea.netaceaCaptchaPath)
+            end)
+
             it("should inject the recommendation headers from a valid session", function()
                 cookies_mock.parseMitataCookie = spy.new(function()
                     return {
@@ -419,6 +460,236 @@ insulate("lua_resty_netacea", function()
                 assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
                 assert.spy(mitigation_mock.getBestMitigation).was_not_called()
                 assert.spy(ngx_mock.exit).was_not_called()
+            end)
+
+            it("should serve captcha on the configured captcha path with valid trackingId", function()
+                protector_client_instance.getCaptchaPage = spy.new(function(_, trackingId)
+                    assert.are.equal("e334cc64-6cc2-4193-92dd-237e38bab4a7", trackingId)
+                    return {
+                        response = {
+                            body = "<html>captcha</html>"
+                        }
+                    }
+                end)
+                ngx_mock.var.uri = "/captcha"
+                ngx_mock.var.arg_trackingId = "e334cc64-6cc2-4193-92dd-237e38bab4a7"
+
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    netaceaCaptchaPath = "/captcha"
+                })
+
+                netacea:mitigate()
+
+                assert.spy(protector_client_instance.checkReputation).was_not_called()
+                assert.spy(protector_client_instance.getCaptchaPage).was.called(1)
+                assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
+                    enableCaptchaContentNegotiation = false,
+                    netaceaCaptchaPath = "/captcha",
+                    captchaPath = "/captcha",
+                    trackingId = "e334cc64-6cc2-4193-92dd-237e38bab4a7"
+                })
+                assert.spy(ngx_mock.exit).was_not_called()
+            end)
+
+            it("should serve json captcha when content negotiation is enabled and html is not accepted", function()
+                protector_client_instance.checkReputation = spy.new(function()
+                    return {
+                        match = "2",
+                        mitigate = "4",
+                        captcha = "1",
+                        response = {
+                            body = "<html>captcha</html>"
+                        }
+                    }
+                end)
+                ngx_mock.var.http_accept = "application/json"
+
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    enableCaptchaContentNegotiation = true
+                })
+
+                mitigation_mock.getBestMitigation = spy.new(function()
+                    return "captcha"
+                end)
+                netacea:mitigate()
+
+                assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
+                    enableCaptchaContentNegotiation = true,
+                    captchaPath = nil
+                })
+                assert.spy(ngx_mock.exit).was_not_called()
+            end)
+
+            it("should keep serving html captcha when netaceaCaptchaPath is configured", function()
+                protector_client_instance.checkReputation = spy.new(function()
+                    return {
+                        match = "2",
+                        mitigate = "4",
+                        captcha = "1",
+                        response = {
+                            body = "<html>captcha</html>"
+                        }
+                    }
+                end)
+                ngx_mock.var.http_accept = "application/json"
+
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    enableCaptchaContentNegotiation = true,
+                    netaceaCaptchaPath = "/captcha"
+                })
+
+                mitigation_mock.getBestMitigation = spy.new(function()
+                    return "captcha"
+                end)
+                netacea:mitigate()
+
+                assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
+                    enableCaptchaContentNegotiation = true,
+                    netaceaCaptchaPath = "/captcha",
+                    captchaPath = "/captcha"
+                })
+                assert.spy(ngx_mock.exit).was_not_called()
+            end)
+
+            it("should serve negotiated json for checkpoint responses when netaceaCaptchaPath is configured", function()
+                protector_client_instance.checkReputation = spy.new(function()
+                    return {
+                        match = "2",
+                        mitigate = "4",
+                        captcha = "1",
+                        response = {
+                            body = '{"trackingId":"b0343c30-a382-42ad-9d65-fdb005fef054"}'
+                        }
+                    }
+                end)
+                ngx_mock.var.http_accept = "application/json"
+
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    enableCaptchaContentNegotiation = true,
+                    netaceaCaptchaPath = "/captcha"
+                })
+
+                mitigation_mock.getBestMitigation = spy.new(function()
+                    return "checkpoint"
+                end)
+                netacea:mitigate()
+
+                assert.spy(mitigation_mock.serveCaptcha).was.called_with('{"trackingId":"b0343c30-a382-42ad-9d65-fdb005fef054"}', {
+                    enableCaptchaContentNegotiation = true,
+                    netaceaCaptchaPath = "/captcha",
+                    captchaPath = "/captcha"
+                })
+                assert.spy(ngx_mock.exit).was_not_called()
+            end)
+
+            it("should not invent a captcha path when netaceaCaptchaPath is unset", function()
+                protector_client_instance.checkReputation = spy.new(function()
+                    return {
+                        match = "2",
+                        mitigate = "4",
+                        captcha = "1",
+                        response = {
+                            body = "<html>captcha</html>"
+                        }
+                    }
+                end)
+                ngx_mock.var.http_accept = "application/json"
+
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    enableCaptchaContentNegotiation = true
+                })
+
+                mitigation_mock.getBestMitigation = spy.new(function()
+                    return "captcha"
+                end)
+                netacea:mitigate()
+
+                assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
+                    enableCaptchaContentNegotiation = true,
+                    netaceaCaptchaPath = nil,
+                    captchaPath = nil
+                })
+                assert.spy(ngx_mock.exit).was_not_called()
+            end)
+
+            it("should ignore invalid trackingId on the configured captcha path", function()
+                protector_client_instance.getCaptchaPage = spy.new(function(_, trackingId)
+                    assert.is_nil(trackingId)
+                    return {
+                        response = {
+                            body = "<html>captcha</html>"
+                        }
+                    }
+                end)
+                ngx_mock.var.uri = "/captcha"
+                ngx_mock.var.arg_trackingId = "not a uuid"
+
+                local netacea = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    netaceaCaptchaPath = "/captcha"
+                })
+
+                netacea:mitigate()
+
+                assert.spy(protector_client_instance.checkReputation).was_not_called()
+                assert.spy(protector_client_instance.getCaptchaPage).was.called(1)
+                assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
+                    enableCaptchaContentNegotiation = false,
+                    netaceaCaptchaPath = "/captcha",
+                    captchaPath = "/captcha"
+                })
+                assert.spy(ngx_mock.exit).was_not_called()
+            end)
+
+            it("should only enable captcha content negotiation when set to true", function()
+                local enabled = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    enableCaptchaContentNegotiation = true
+                })
+                local disabled = Netacea:new({
+                    ingestEnabled = false,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    enableCaptchaContentNegotiation = "true"
+                })
+
+                assert.is_true(enabled.enableCaptchaContentNegotiation)
+                assert.is_false(disabled.enableCaptchaContentNegotiation)
             end)
         end)
 

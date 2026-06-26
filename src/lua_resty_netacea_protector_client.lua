@@ -17,20 +17,41 @@ local function createHttpConnection()
   return hc
 end
 
+local function appendTrackingId(url, trackingId)
+    if not trackingId then return url end
+    local separator = url:find('?', 1, true) and '&' or '?'
+    return url .. separator .. "trackingId=" .. trackingId
+end
+
 function ProtectorClient:new(options)
     local n = {}
     setmetatable(n, self)
 
     n.apiKey = options.apiKey
     n.mitigationEndpoint = options.mitigationEndpoint or {}
+    n.enableCaptchaContentNegotiation = options.enableCaptchaContentNegotiation == true
     n.endpointIndex = 0
 
     return n
 end
 
+local function getCaptchaContentTypeHeader(enableCaptchaContentNegotiation)
+    if not enableCaptchaContentNegotiation then return nil end
+
+    local accept = ngx.var and ngx.var.http_accept or nil
+    if type(accept) ~= "string" then return nil end
+
+    accept = accept:lower()
+    if accept:find("application/json", 1, true) == nil then return nil end
+    if accept:find("text/html", 1, true) ~= nil then return nil end
+
+    return "application/json"
+end
+
 function ProtectorClient:getMitigationRequestHeaders()
     local NetaceaState = ngx.ctx.NetaceaState
     local content_type = ngx.var and ngx.var.http_content_type or nil
+    local captcha_content_type = getCaptchaContentTypeHeader(self.enableCaptchaContentNegotiation)
 
     local cookie = ''
     if NetaceaState ~= nil and NetaceaState.captcha_cookie ~= nil then
@@ -40,6 +61,7 @@ function ProtectorClient:getMitigationRequestHeaders()
     local headers = {
         ["x-netacea-api-key"] = self.apiKey,
         ["content-type"] = content_type or 'application/x-www-form-urlencoded',
+        ["x-netacea-captcha-content-type"] = captcha_content_type,
         ["cookie"] = cookie,
         ["user-agent"] = NetaceaState.user_agent or '',
         ["x-netacea-client-ip"] = NetaceaState.client or '',
@@ -114,6 +136,30 @@ function ProtectorClient:validateCaptcha(captcha_data)
       captcha = captchaState,
       exit_status = res.status,
       captcha_cookie = res.headers['X-Netacea-MitATACaptcha-Value'] or nil
+  }
+end
+
+function ProtectorClient:getCaptchaPage(trackingId)
+  local hc = createHttpConnection()
+
+  local headers = self:getMitigationRequestHeaders()
+  self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
+
+  local res, err = hc:request_uri(
+    appendTrackingId(self.mitigationEndpoint[self.endpointIndex + 1] .. '/captcha', trackingId),
+    {
+      method = 'GET',
+      headers = headers
+    }
+  )
+  if (err) then return nil end
+
+  return {
+    response = {
+      status = res.status,
+      body = res.body,
+      headers = res.headers
+    }
   }
 end
 

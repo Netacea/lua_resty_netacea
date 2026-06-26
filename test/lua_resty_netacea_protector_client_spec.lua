@@ -74,10 +74,12 @@ describe("lua_resty_netacea_protector_client", function()
         it("should create a new instance with provided options", function()
             local client = ProtectorClient:new({
                 apiKey = "test-api-key",
-                mitigationEndpoint = { "https://endpoint1.example.com" }
+                mitigationEndpoint = { "https://endpoint1.example.com" },
+                enableCaptchaContentNegotiation = true
             })
             assert.are.equal("test-api-key", client.apiKey)
             assert.are.same({ "https://endpoint1.example.com" }, client.mitigationEndpoint)
+            assert.is_true(client.enableCaptchaContentNegotiation)
             assert.are.equal(0, client.endpointIndex)
         end)
 
@@ -159,6 +161,39 @@ describe("lua_resty_netacea_protector_client", function()
             })
             local headers = client:getMitigationRequestHeaders()
             assert.are.equal("", headers["x-netacea-userid"])
+        end)
+
+        it("should send captcha content type when negotiation is enabled and application/json is accepted", function()
+            ngx_mock.var.http_accept = "application/json"
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" },
+                enableCaptchaContentNegotiation = true
+            })
+            local headers = client:getMitigationRequestHeaders()
+            assert.are.equal("application/json", headers["x-netacea-captcha-content-type"])
+        end)
+
+        it("should not send captcha content type when text/html is accepted", function()
+            ngx_mock.var.http_accept = "text/html,application/json"
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" },
+                enableCaptchaContentNegotiation = true
+            })
+            local headers = client:getMitigationRequestHeaders()
+            assert.is_nil(headers["x-netacea-captcha-content-type"])
+        end)
+
+        it("should not send captcha content type when negotiation is disabled", function()
+            ngx_mock.var.http_accept = "application/json"
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" },
+                enableCaptchaContentNegotiation = false
+            })
+            local headers = client:getMitigationRequestHeaders()
+            assert.is_nil(headers["x-netacea-captcha-content-type"])
         end)
     end)
 
@@ -407,6 +442,33 @@ describe("lua_resty_netacea_protector_client", function()
             local result = client:validateCaptcha("captcha_data")
             assert.are.equal(200, result.response.status)
             assert.are.equal("response body", result.response.body)
+        end)
+    end)
+
+    describe("getCaptchaPage", function()
+        it("should make a GET request to the captcha endpoint", function()
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" }
+            })
+            client:getCaptchaPage("e334cc64-6cc2-4193-92dd-237e38bab4a7")
+            assert.spy(http_mock_instance.request_uri).was.called(1)
+            local call_args = http_mock_instance.request_uri.calls[1]
+            assert.are.equal(
+                "https://endpoint1.example.com/captcha?trackingId=e334cc64-6cc2-4193-92dd-237e38bab4a7",
+                call_args.vals[2]
+            )
+            assert.are.equal("GET", call_args.vals[3].method)
+        end)
+
+        it("should omit trackingId when not provided", function()
+            local client = ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" }
+            })
+            client:getCaptchaPage(nil)
+            local call_args = http_mock_instance.request_uri.calls[1]
+            assert.are.equal("https://endpoint1.example.com/captcha", call_args.vals[2])
         end)
     end)
 end)

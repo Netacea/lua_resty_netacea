@@ -8,7 +8,7 @@ local Constants = require("lua_resty_netacea_constants")
 local mitigation = require("lua_resty_netacea_mitigation")
 
 local _N = {}
-_N._VERSION = '1.3.0'
+_N._VERSION = '1.4.0'
 _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'
@@ -39,6 +39,16 @@ local function setInjectHeaders(protector_result)
   ngx.req.set_header('x-netacea-mitigate', mitigationType)
   ngx.req.set_header('x-netacea-captcha', captchaState)
   return idType, mitigationType, captchaState
+end
+
+local function serveCaptchaFailOpen(body, options)
+  local ok, err = pcall(mitigation.serveCaptcha, body, options)
+  if not ok then
+    ngx.log(ngx.WARN, "NETACEA MITIGATE - captcha response failed open: ", err)
+    return false
+  end
+
+  return true
 end
 
 function _N:new(options)
@@ -111,6 +121,10 @@ function _N:new(options)
   n.userIdKey = utils.parseOption(options.userIdKey, '')
   -- global:optional:checkpointSignalPath
   n.checkpointSignalPath = utils.parseOption(options.checkpointSignalPath, nil)
+  -- global:optional:netaceaCaptchaPath
+  n.netaceaCaptchaPath = utils.normalizeRelativePath(utils.parseOption(options.netaceaCaptchaPath, nil))
+  -- global:optional:enableCaptchaContentNegotiation
+  n.enableCaptchaContentNegotiation = options.enableCaptchaContentNegotiation == true
   -- global:required:apiKey
   n.apiKey = utils.parseOption(options.apiKey, nil)
   if not n.apiKey then
@@ -132,7 +146,8 @@ function _N:new(options)
   if n.mitigationEnabled then
     n.protectorClient = protector_client:new{
       apiKey = n.apiKey,
-      mitigationEndpoint = n.mitigationEndpoint
+      mitigationEndpoint = n.mitigationEndpoint,
+      enableCaptchaContentNegotiation = n.enableCaptchaContentNegotiation
     }
   end
 
@@ -291,6 +306,24 @@ function _N:mitigate()
   end
   local parsed_cookie = self:handleSession()
 
+  if self.netaceaCaptchaPath and ngx.var.uri == self.netaceaCaptchaPath then
+    local trackingId = ngx.var.arg_trackingId
+    --TODO: make this more lenient to all JWE tokens
+    if not utils.isSafeTrackingId(trackingId) then
+      trackingId = nil
+    end
+    local captcha_result = self.protectorClient:getCaptchaPage(trackingId)
+    if captcha_result then
+      serveCaptchaFailOpen(captcha_result.response.body, {
+        enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
+        netaceaCaptchaPath = self.netaceaCaptchaPath,
+        captchaPath = self.netaceaCaptchaPath,
+        trackingId = trackingId
+      })
+    end
+    return
+  end
+
   -- Return early on requests to the checkpoint signal path
   local signalPathEnabled = (self.checkpointSignalPath or '') ~= ''
   if signalPathEnabled and ngx.var.uri == self.checkpointSignalPath then
@@ -332,7 +365,11 @@ function _N:mitigate()
       local captchaBody = protector_result.response.body
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      mitigation.serveCaptcha(captchaBody)
+      serveCaptchaFailOpen(captchaBody, {
+        enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
+        netaceaCaptchaPath = self.netaceaCaptchaPath,
+        captchaPath = self.netaceaCaptchaPath
+      })
       return
     end
 
@@ -341,7 +378,11 @@ function _N:mitigate()
       local checkpointBody = protector_result.response.body
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      mitigation.serveCaptcha(checkpointBody)
+      serveCaptchaFailOpen(checkpointBody, {
+        enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
+        netaceaCaptchaPath = self.netaceaCaptchaPath,
+        captchaPath = self.netaceaCaptchaPath
+      })
       return
     end
 

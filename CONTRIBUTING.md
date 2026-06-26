@@ -35,7 +35,8 @@ To include coverage output:
 export LUACOV_REPORT=1 && ./run_lua_tests.sh
 ```
 
-You can also run tests through Docker Compose:
+For ease of use, the recommended way to run tests outside of the dev container
+is through Docker Compose:
 
 ```sh
 docker compose run --rm --build test
