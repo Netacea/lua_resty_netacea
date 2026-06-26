@@ -181,6 +181,16 @@ describe("lua_resty_netacea_mitigation", function()
             assert.spy(ngx_mock.print).was.called_with("429 Forbidden")
         end)
 
+        it("should print the configured blocked response body verbatim", function()
+            mitigation.serveBlock(429, "Too many requests")
+            assert.spy(ngx_mock.print).was.called_with("Too many requests")
+        end)
+
+        it("should set the configured blocked response content type", function()
+            mitigation.serveBlock(429, "Too many requests", "text/plain; charset=utf-8")
+            assert.are.equal("text/plain; charset=utf-8", ngx_mock.header["content-type"])
+        end)
+
         it("should exit with HTTP_FORBIDDEN", function()
             mitigation.serveBlock()
             assert.spy(ngx_mock.exit).was.called_with(403)

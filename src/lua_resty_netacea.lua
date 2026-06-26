@@ -153,6 +153,10 @@ function _N:new(options)
   if n.blockedResponseStatus then
     n.blockedResponseStatus = math.floor(n.blockedResponseStatus)
   end
+  -- global:optional:blockedResponseBody
+  n.blockedResponseBody = utils.parseOption(options.blockedResponseBody, nil)
+  -- global:optional:blockedResponseContentType
+  n.blockedResponseContentType = utils.parseOption(options.blockedResponseContentType, nil)
   -- global:optional:enableCaptchaContentNegotiation
   n.enableCaptchaContentNegotiation = options.enableCaptchaContentNegotiation == true
   -- global:required:apiKey
@@ -419,7 +423,7 @@ function _N:mitigate()
       ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving block")
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      mitigation.serveBlock(self.blockedResponseStatus)
+      mitigation.serveBlock(self.blockedResponseStatus, self.blockedResponseBody, self.blockedResponseContentType)
       return
     end
 

@@ -120,11 +120,15 @@ function _M.serveCaptcha(captchaBody, options)
   return ngx.exit(ngx.HTTP_OK)
 end
 
-function _M.serveBlock(blockedResponseStatus)
+function _M.serveBlock(blockedResponseStatus, blockedResponseBody, blockedResponseContentType)
   local status = tonumber(blockedResponseStatus) or ngx.HTTP_FORBIDDEN
+  local body = blockedResponseBody or (tostring(status) .. " Forbidden")
   ngx.status = status;
+  if blockedResponseContentType then
+    ngx.header["content-type"] = blockedResponseContentType
+  end
   ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
-  ngx.print(tostring(status) .. " Forbidden");
+  ngx.print(body);
   return ngx.exit(status);
 end
 
