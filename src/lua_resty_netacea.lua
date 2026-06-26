@@ -338,8 +338,15 @@ function _N:mitigate()
     return nil
   end
   local parsed_cookie = self:handleSession()
+  local parsed_cookie_data = parsed_cookie.data or {}
 
   if self.netaceaCaptchaPath and ngx.var.uri == self.netaceaCaptchaPath then
+    ngx.ctx.NetaceaState.bc_type = self:setBcType(
+      parsed_cookie_data.mat or nil,
+      parsed_cookie_data.mit or nil,
+      Constants['captchaStates'].SERVE
+    )
+    ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving configured captcha path")
     local trackingId = ngx.var.arg_trackingId
     --TODO: make this more lenient to all JWE tokens
     if not utils.isSafeTrackingId(trackingId) then
@@ -361,8 +368,8 @@ function _N:mitigate()
   local signalPathEnabled = (self.checkpointSignalPath or '') ~= ''
   if signalPathEnabled and ngx.var.uri == self.checkpointSignalPath then
     ngx.ctx.NetaceaState.bc_type = self:setBcType(
-      parsed_cookie.data.mat or nil,
-      parsed_cookie.data.mit or nil,
+      parsed_cookie_data.mat or nil,
+      parsed_cookie_data.mit or nil,
       Constants['checkpointStates'].SIGNAL
     )
     ngx.exit(ngx.OK)

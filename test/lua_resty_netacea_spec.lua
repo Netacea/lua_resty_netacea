@@ -554,6 +554,7 @@ insulate("lua_resty_netacea", function()
                     captchaPath = "/captcha",
                     trackingId = "e334cc64-6cc2-4193-92dd-237e38bab4a7"
                 })
+                assert.are.equal("ip_flagged,captcha_serve", ngx_mock.ctx.NetaceaState.bc_type)
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
 
