@@ -120,11 +120,12 @@ function _M.serveCaptcha(captchaBody, options)
   return ngx.exit(ngx.HTTP_OK)
 end
 
-function _M.serveBlock()
-  ngx.status = ngx.HTTP_FORBIDDEN;
+function _M.serveBlock(blockedResponseStatus)
+  local status = tonumber(blockedResponseStatus) or ngx.HTTP_FORBIDDEN
+  ngx.status = status;
   ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
-  ngx.print("403 Forbidden");
-  return ngx.exit(ngx.HTTP_FORBIDDEN);
+  ngx.print(tostring(status) .. " Forbidden");
+  return ngx.exit(status);
 end
 
 function _M.serveMonetisationRedirect(location)

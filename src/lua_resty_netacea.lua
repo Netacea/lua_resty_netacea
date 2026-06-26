@@ -148,6 +148,11 @@ function _N:new(options)
   n.checkpointSignalPath = utils.parseOption(options.checkpointSignalPath, nil)
   -- global:optional:netaceaCaptchaPath
   n.netaceaCaptchaPath = utils.normalizeRelativePath(utils.parseOption(options.netaceaCaptchaPath, nil))
+  -- global:optional:blockedResponseStatus
+  n.blockedResponseStatus = tonumber(utils.parseOption(options.blockedResponseStatus, nil))
+  if n.blockedResponseStatus then
+    n.blockedResponseStatus = math.floor(n.blockedResponseStatus)
+  end
   -- global:optional:enableCaptchaContentNegotiation
   n.enableCaptchaContentNegotiation = options.enableCaptchaContentNegotiation == true
   -- global:required:apiKey
@@ -414,7 +419,7 @@ function _N:mitigate()
       ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving block")
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      mitigation.serveBlock()
+      mitigation.serveBlock(self.blockedResponseStatus)
       return
     end
 

@@ -155,6 +155,7 @@ insulate("lua_resty_netacea", function()
                 apiKey = "test-api-key",
                 cookieEncryptionKey = options.cookieEncryptionKey,
                 secretKey = options.secretKey or "test-secret-key",
+                blockedResponseStatus = options.blockedResponseStatus,
                 kinesisProperties = {
                     stream_name = "test-stream",
                     region = "eu-west-1",
@@ -213,6 +214,25 @@ insulate("lua_resty_netacea", function()
         end)
 
         describe("protection mode config", function()
+            it("should store the configured blocked response status", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    blockedResponseStatus = "429",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal(429, netacea.blockedResponseStatus)
+            end)
+
             it("should disable mitigation when mitigationType is INGEST", function()
                 local netacea = Netacea:new({
                     ingestEnabled = true,

@@ -161,6 +161,11 @@ describe("lua_resty_netacea_mitigation", function()
             assert.are.equal(403, ngx_mock.status)
         end)
 
+        it("should use the configured blocked response status", function()
+            mitigation.serveBlock(429)
+            assert.are.equal(429, ngx_mock.status)
+        end)
+
         it("should set Cache-Control to no-cache", function()
             mitigation.serveBlock()
             assert.are.equal("max-age=0, no-cache, no-store, must-revalidate", ngx_mock.header["Cache-Control"])
@@ -169,6 +174,11 @@ describe("lua_resty_netacea_mitigation", function()
         it("should print 403 Forbidden", function()
             mitigation.serveBlock()
             assert.spy(ngx_mock.print).was.called_with("403 Forbidden")
+        end)
+
+        it("should print the configured blocked response status", function()
+            mitigation.serveBlock(429)
+            assert.spy(ngx_mock.print).was.called_with("429 Forbidden")
         end)
 
         it("should exit with HTTP_FORBIDDEN", function()
