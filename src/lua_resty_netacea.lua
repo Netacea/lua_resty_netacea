@@ -41,6 +41,15 @@ local function setInjectHeaders(protector_result)
   return idType, mitigationType, captchaState
 end
 
+local function normalizeBlockedResponseStatus(value)
+  local status = tonumber(value)
+  if not status or status < 100 or status > 599 or status % 1 ~= 0 then
+    return ngx.HTTP_FORBIDDEN
+  end
+
+  return status
+end
+
 local function serveCaptchaFailOpen(body, options)
   local ok, err = pcall(mitigation.serveCaptcha, body, options)
   if not ok then
@@ -149,14 +158,7 @@ function _N:new(options)
   -- global:optional:netaceaCaptchaPath
   n.netaceaCaptchaPath = utils.normalizeRelativePath(utils.parseOption(options.netaceaCaptchaPath, nil))
   -- global:optional:blockedResponseStatus
-  do
-    local blockedResponseStatus = tonumber(utils.parseOption(options.blockedResponseStatus, nil))
-    if blockedResponseStatus and blockedResponseStatus >= 100 and blockedResponseStatus <= 599 and blockedResponseStatus % 1 == 0 then
-      n.blockedResponseStatus = blockedResponseStatus
-    else
-      n.blockedResponseStatus = ngx.HTTP_FORBIDDEN
-    end
-  end
+  n.blockedResponseStatus = normalizeBlockedResponseStatus(utils.parseOption(options.blockedResponseStatus, nil))
   -- global:optional:blockedResponseBody
   n.blockedResponseBody = utils.parseOption(options.blockedResponseBody, nil)
   -- global:optional:blockedResponseContentType
