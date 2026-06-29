@@ -32,6 +32,7 @@ insulate("lua_resty_netacea", function()
                     get_body_file = spy.new(function() return nil end),
                     set_header = spy.new(function() end)
                 },
+                HTTP_FORBIDDEN = 403,
                 DEBUG = 7,
                 WARN = 4,
                 ERR = 3
@@ -233,6 +234,44 @@ insulate("lua_resty_netacea", function()
                 })
 
                 assert.are.equal(429, netacea.blockedResponseStatus)
+            end)
+
+            it("should default blocked response status to HTTP_FORBIDDEN when invalid", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    blockedResponseStatus = "700",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal(403, netacea.blockedResponseStatus)
+            end)
+
+            it("should default blocked response status to HTTP_FORBIDDEN when not an integer", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    blockedResponseStatus = "429.5",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal(403, netacea.blockedResponseStatus)
             end)
 
             it("should store the configured blocked response body", function()

@@ -118,7 +118,7 @@ NETACEA_PROTECTOR_API_URL=https://your-protector-api-url
 | --------------------------------------------- | ------------------------ |
 | `NETACEA_API_KEY`                             | none                     |
 | `NETACEA_BLOCKED_RESPONSE_BODY`               | unset                    |
-| `NETACEA_BLOCKED_RESPONSE_CONTENT_TYPE`       | unset                    |
+| `NETACEA_BLOCKED_RESPONSE_CONTENT_TYPE`       | `text/plain`                    |
 | `NETACEA_BLOCKED_RESPONSE_STATUS`             | `403`                    |
 | `NETACEA_CAPTCHA_COOKIE_ATTRIBUTES`           | `Max-Age=86400; Path=/;` |
 | `NETACEA_CAPTCHA_COOKIE_NAME`                 | `_mitatacaptcha`         |

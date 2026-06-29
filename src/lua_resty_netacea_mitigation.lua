@@ -121,7 +121,10 @@ function _M.serveCaptcha(captchaBody, options)
 end
 
 function _M.serveBlock(blockedResponseStatus, blockedResponseBody, blockedResponseContentType)
-  local status = tonumber(blockedResponseStatus) or ngx.HTTP_FORBIDDEN
+  local status = tonumber(blockedResponseStatus)
+  if not status or status < 100 or status > 599 or status % 1 ~= 0 then
+    status = ngx.HTTP_FORBIDDEN
+  end
   local body = blockedResponseBody or (tostring(status) .. " Forbidden")
   ngx.status = status;
   if blockedResponseContentType then
