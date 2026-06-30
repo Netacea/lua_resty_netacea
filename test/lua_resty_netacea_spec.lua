@@ -29,8 +29,10 @@ insulate("lua_resty_netacea", function()
                 req = {
                     read_body = spy.new(function() end),
                     get_body_data = spy.new(function() return "captcha-response" end),
+                    get_body_file = spy.new(function() return nil end),
                     set_header = spy.new(function() end)
                 },
+                HTTP_FORBIDDEN = 403,
                 DEBUG = 7,
                 WARN = 4,
                 ERR = 3
@@ -154,6 +156,9 @@ insulate("lua_resty_netacea", function()
                 apiKey = "test-api-key",
                 cookieEncryptionKey = options.cookieEncryptionKey,
                 secretKey = options.secretKey or "test-secret-key",
+                blockedResponseStatus = options.blockedResponseStatus,
+                blockedResponseBody = options.blockedResponseBody,
+                blockedResponseContentType = options.blockedResponseContentType,
                 kinesisProperties = {
                     stream_name = "test-stream",
                     region = "eu-west-1",
@@ -212,6 +217,101 @@ insulate("lua_resty_netacea", function()
         end)
 
         describe("protection mode config", function()
+            it("should store the configured blocked response status", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    blockedResponseStatus = "429",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal(429, netacea.blockedResponseStatus)
+            end)
+
+            it("should default blocked response status to HTTP_FORBIDDEN when invalid", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    blockedResponseStatus = "700",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal(403, netacea.blockedResponseStatus)
+            end)
+
+            it("should default blocked response status to HTTP_FORBIDDEN when not an integer", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    blockedResponseStatus = "429.5",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal(403, netacea.blockedResponseStatus)
+            end)
+
+            it("should store the configured blocked response body", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    blockedResponseBody = "Too many requests",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal("Too many requests", netacea.blockedResponseBody)
+            end)
+
+            it("should store the configured blocked response content type", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    blockedResponseContentType = "text/plain; charset=utf-8",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal("text/plain; charset=utf-8", netacea.blockedResponseContentType)
+            end)
+
             it("should disable mitigation when mitigationType is INGEST", function()
                 local netacea = Netacea:new({
                     ingestEnabled = true,
@@ -463,6 +563,17 @@ insulate("lua_resty_netacea", function()
             end)
 
             it("should serve captcha on the configured captcha path with valid trackingId", function()
+                cookies_mock.parseMitataCookie = spy.new(function()
+                    return {
+                        valid = true,
+                        user_id = "existing-user-id",
+                        data = {
+                            mat = "2",
+                            mit = "4",
+                            cap = "0"
+                        }
+                    }
+                end)
                 protector_client_instance.getCaptchaPage = spy.new(function(_, trackingId)
                     assert.are.equal("e334cc64-6cc2-4193-92dd-237e38bab4a7", trackingId)
                     return {
@@ -493,6 +604,7 @@ insulate("lua_resty_netacea", function()
                     captchaPath = "/captcha",
                     trackingId = "e334cc64-6cc2-4193-92dd-237e38bab4a7"
                 })
+                assert.are.equal("ip_flagged,captcha_serve", ngx_mock.ctx.NetaceaState.bc_type)
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
 
@@ -925,6 +1037,72 @@ insulate("lua_resty_netacea", function()
                 )
                 assert.spy(ngx_mock.print).was.called_with("Captcha OK")
                 assert.spy(ngx_mock.exit).was.called_with(200)
+            end)
+
+            it("should read captcha request bodies from the temporary file when needed", function()
+                local body_file = os.tmpname()
+                local file = assert(io.open(body_file, "wb"))
+                file:write("captcha-from-file")
+                file:close()
+
+                ngx_mock.req.get_body_data = spy.new(function()
+                    return nil
+                end)
+                ngx_mock.req.get_body_file = spy.new(function()
+                    return body_file
+                end)
+
+                local captured_body
+                protector_client_instance.validateCaptcha = spy.new(function(_, body)
+                    captured_body = body
+                    return {
+                        match = "1",
+                        mitigate = "1",
+                        captcha = "2",
+                        exit_status = 200,
+                        captcha_cookie = nil,
+                        response = {
+                            body = "Captcha OK"
+                        }
+                    }
+                end)
+
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.are.equal("captcha-from-file", captured_body)
+                os.remove(body_file)
+            end)
+
+            it("should return nil captcha body when the body file cannot be read", function()
+                ngx_mock.req.get_body_data = spy.new(function()
+                    return nil
+                end)
+                ngx_mock.req.get_body_file = spy.new(function()
+                    return "/tmp/definitely-not-a-real-body-file"
+                end)
+
+                local captured_body
+                protector_client_instance.validateCaptcha = spy.new(function(_, body)
+                    captured_body = body
+                    return {
+                        match = "1",
+                        mitigate = "1",
+                        captcha = "2",
+                        exit_status = 200,
+                        captcha_cookie = nil,
+                        response = {
+                            body = "Captcha OK"
+                        }
+                    }
+                end)
+
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.is_nil(captured_body)
             end)
         end)
     end)

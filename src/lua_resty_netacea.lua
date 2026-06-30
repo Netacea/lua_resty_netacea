@@ -8,7 +8,7 @@ local Constants = require("lua_resty_netacea_constants")
 local mitigation = require("lua_resty_netacea_mitigation")
 
 local _N = {}
-_N._VERSION = '1.4.0'
+_N._VERSION = '1.5.0'
 _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'
@@ -41,6 +41,15 @@ local function setInjectHeaders(protector_result)
   return idType, mitigationType, captchaState
 end
 
+local function normalizeBlockedResponseStatus(value)
+  local status = tonumber(value)
+  if not status or status < 100 or status > 599 or status % 1 ~= 0 then
+    return ngx.HTTP_FORBIDDEN
+  end
+
+  return status
+end
+
 local function serveCaptchaFailOpen(body, options)
   local ok, err = pcall(mitigation.serveCaptcha, body, options)
   if not ok then
@@ -49,6 +58,31 @@ local function serveCaptchaFailOpen(body, options)
   end
 
   return true
+end
+
+local function readRequestBody()
+  ngx.req.read_body()
+
+  local body = ngx.req.get_body_data()
+  if body ~= nil then
+    return body
+  end
+
+  local body_file = ngx.req.get_body_file()
+  if not body_file then
+    return nil
+  end
+
+  local file, err = io.open(body_file, "rb")
+  if not file then
+    ngx.log(ngx.WARN, "NETACEA CAPTCHA - unable to read request body file: ", err)
+    return nil
+  end
+
+  local data = file:read("*a")
+  file:close()
+
+  return data
 end
 
 function _N:new(options)
@@ -123,6 +157,12 @@ function _N:new(options)
   n.checkpointSignalPath = utils.parseOption(options.checkpointSignalPath, nil)
   -- global:optional:netaceaCaptchaPath
   n.netaceaCaptchaPath = utils.normalizeRelativePath(utils.parseOption(options.netaceaCaptchaPath, nil))
+  -- global:optional:blockedResponseStatus
+  n.blockedResponseStatus = normalizeBlockedResponseStatus(utils.parseOption(options.blockedResponseStatus, nil))
+  -- global:optional:blockedResponseBody
+  n.blockedResponseBody = utils.parseOption(options.blockedResponseBody, nil)
+  -- global:optional:blockedResponseContentType
+  n.blockedResponseContentType = utils.parseOption(options.blockedResponseContentType, nil)
   -- global:optional:enableCaptchaContentNegotiation
   n.enableCaptchaContentNegotiation = options.enableCaptchaContentNegotiation == true
   -- global:required:apiKey
@@ -257,8 +297,7 @@ end
 function _N:handleCaptcha()
   self:handleSession()
 
-  ngx.req.read_body()
-  local captcha_data = ngx.req.get_body_data()
+  local captcha_data = readRequestBody()
   local protector_result = self.protectorClient:validateCaptcha(captcha_data)
   ngx.ctx.NetaceaState.protector_result = protector_result
   ngx.ctx.NetaceaState.grace_period = -1000
@@ -305,8 +344,15 @@ function _N:mitigate()
     return nil
   end
   local parsed_cookie = self:handleSession()
+  local parsed_cookie_data = parsed_cookie.data or {}
 
   if self.netaceaCaptchaPath and ngx.var.uri == self.netaceaCaptchaPath then
+    ngx.ctx.NetaceaState.bc_type = self:setBcType(
+      parsed_cookie_data.mat or nil,
+      parsed_cookie_data.mit or nil,
+      Constants['captchaStates'].SERVE
+    )
+    ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving configured captcha path")
     local trackingId = ngx.var.arg_trackingId
     --TODO: make this more lenient to all JWE tokens
     if not utils.isSafeTrackingId(trackingId) then
@@ -328,8 +374,8 @@ function _N:mitigate()
   local signalPathEnabled = (self.checkpointSignalPath or '') ~= ''
   if signalPathEnabled and ngx.var.uri == self.checkpointSignalPath then
     ngx.ctx.NetaceaState.bc_type = self:setBcType(
-      parsed_cookie.data.mat or nil,
-      parsed_cookie.data.mit or nil,
+      parsed_cookie_data.mat or nil,
+      parsed_cookie_data.mit or nil,
       Constants['checkpointStates'].SIGNAL
     )
     ngx.exit(ngx.OK)
@@ -390,7 +436,7 @@ function _N:mitigate()
       ngx.log(ngx.DEBUG, "NETACEA MITIGATE - serving block")
       ngx.ctx.NetaceaState.grace_period = -1000
       self:refreshSession(parsed_cookie.reason)
-      mitigation.serveBlock()
+      mitigation.serveBlock(self.blockedResponseStatus, self.blockedResponseBody, self.blockedResponseContentType)
       return
     end
 
