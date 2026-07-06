@@ -1,5 +1,5 @@
 package = "lua_resty_netacea"
-version = "1.5.0-0"
+version = "1.6.0-0"
 source = {
   url = "git://github.com/Netacea/lua_resty_netacea",
   branch = "master"
