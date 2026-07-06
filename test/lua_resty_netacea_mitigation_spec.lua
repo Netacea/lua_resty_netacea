@@ -63,7 +63,15 @@ describe("lua_resty_netacea_mitigation", function()
 
         it("should exit with HTTP_OK", function()
             mitigation.serveCaptcha("<html>captcha</html>")
-            assert.spy(ngx_mock.exit).was.called_with(200)
+            assert.spy(ngx_mock.exit).was.called_with(403)
+        end)
+
+        it("should use the configured challenge response status", function()
+            mitigation.serveCaptcha("<html>captcha</html>", {
+                challengeResponseStatus = 429
+            })
+            assert.are.equal(429, ngx_mock.status)
+            assert.spy(ngx_mock.exit).was.called_with(429)
         end)
 
         it("should serve json when html is not accepted but json is accepted", function()
@@ -73,13 +81,15 @@ describe("lua_resty_netacea_mitigation", function()
                 enableCaptchaContentNegotiation = true,
                 netaceaCaptchaPath = "/captcha",
                 captchaPath = "/getCaptcha",
-                trackingId = "a1a16640-e1f0-4de4-a3a6-140c45181383"
+                trackingId = "a1a16640-e1f0-4de4-a3a6-140c45181383",
+                challengeResponseStatus = 429
             })
 
             assert.are.equal("application/json", ngx_mock.header["content-type"])
             assert.spy(ngx_mock.print).was.called_with(
                 '{"captchaRelativeURL":"/getCaptcha?trackingId=a1a16640-e1f0-4de4-a3a6-140c45181383","captchaAbsoluteURL":"https://example.com/getCaptcha?trackingId=a1a16640-e1f0-4de4-a3a6-140c45181383"}'
             )
+            assert.spy(ngx_mock.exit).was.called_with(429)
         end)
 
         it("should keep html when text/html is accepted", function()

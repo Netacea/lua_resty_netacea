@@ -41,7 +41,7 @@ local function setInjectHeaders(protector_result)
   return idType, mitigationType, captchaState
 end
 
-local function normalizeBlockedResponseStatus(value)
+local function normalizeHttpStatus(value)
   local status = tonumber(value)
   if not status or status < 100 or status > 599 or status % 1 ~= 0 then
     return ngx.HTTP_FORBIDDEN
@@ -158,7 +158,9 @@ function _N:new(options)
   -- global:optional:netaceaCaptchaPath
   n.netaceaCaptchaPath = utils.normalizeRelativePath(utils.parseOption(options.netaceaCaptchaPath, nil))
   -- global:optional:blockedResponseStatus
-  n.blockedResponseStatus = normalizeBlockedResponseStatus(utils.parseOption(options.blockedResponseStatus, nil))
+  n.blockedResponseStatus = normalizeHttpStatus(utils.parseOption(options.blockedResponseStatus, nil))
+  -- global:optional:challengeResponseStatus
+  n.challengeResponseStatus = normalizeHttpStatus(utils.parseOption(options.challengeResponseStatus, nil))
   -- global:optional:blockedResponseBody
   n.blockedResponseBody = utils.parseOption(options.blockedResponseBody, nil)
   -- global:optional:blockedResponseContentType
@@ -364,7 +366,8 @@ function _N:mitigate()
         enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
         netaceaCaptchaPath = self.netaceaCaptchaPath,
         captchaPath = self.netaceaCaptchaPath,
-        trackingId = trackingId
+        trackingId = trackingId,
+        challengeResponseStatus = self.challengeResponseStatus
       })
     end
     return
@@ -414,7 +417,8 @@ function _N:mitigate()
       serveCaptchaFailOpen(captchaBody, {
         enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
         netaceaCaptchaPath = self.netaceaCaptchaPath,
-        captchaPath = self.netaceaCaptchaPath
+        captchaPath = self.netaceaCaptchaPath,
+        challengeResponseStatus = self.challengeResponseStatus
       })
       return
     end
@@ -427,7 +431,8 @@ function _N:mitigate()
       serveCaptchaFailOpen(checkpointBody, {
         enableCaptchaContentNegotiation = self.enableCaptchaContentNegotiation,
         netaceaCaptchaPath = self.netaceaCaptchaPath,
-        captchaPath = self.netaceaCaptchaPath
+        captchaPath = self.netaceaCaptchaPath,
+        challengeResponseStatus = self.challengeResponseStatus
       })
       return
     end
