@@ -157,6 +157,7 @@ insulate("lua_resty_netacea", function()
                 cookieEncryptionKey = options.cookieEncryptionKey,
                 secretKey = options.secretKey or "test-secret-key",
                 blockedResponseStatus = options.blockedResponseStatus,
+                challengeResponseStatus = options.challengeResponseStatus,
                 blockedResponseBody = options.blockedResponseBody,
                 blockedResponseContentType = options.blockedResponseContentType,
                 kinesisProperties = {
@@ -310,6 +311,25 @@ insulate("lua_resty_netacea", function()
                 })
 
                 assert.are.equal("text/plain; charset=utf-8", netacea.blockedResponseContentType)
+            end)
+
+            it("should store the configured challenge response status", function()
+                local netacea = Netacea:new({
+                    ingestEnabled = true,
+                    mitigationType = "MITIGATE",
+                    mitigationEndpoint = "https://mitigation.example",
+                    apiKey = "test-api-key",
+                    cookieEncryptionKey = "test-cookie-encryption-key",
+                    challengeResponseStatus = "429",
+                    kinesisProperties = {
+                        stream_name = "test-stream",
+                        region = "eu-west-1",
+                        aws_access_key = "test-access-key",
+                        aws_secret_key = "test-secret-key"
+                    }
+                })
+
+                assert.are.equal(429, netacea.challengeResponseStatus)
             end)
 
             it("should disable mitigation when mitigationType is INGEST", function()
@@ -591,7 +611,8 @@ insulate("lua_resty_netacea", function()
                     mitigationEndpoint = "https://mitigation.example",
                     apiKey = "test-api-key",
                     cookieEncryptionKey = "test-cookie-encryption-key",
-                    netaceaCaptchaPath = "/captcha"
+                    netaceaCaptchaPath = "/captcha",
+                    challengeResponseStatus = 403
                 })
 
                 netacea:mitigate()
@@ -602,7 +623,8 @@ insulate("lua_resty_netacea", function()
                     enableCaptchaContentNegotiation = false,
                     netaceaCaptchaPath = "/captcha",
                     captchaPath = "/captcha",
-                    trackingId = "e334cc64-6cc2-4193-92dd-237e38bab4a7"
+                    trackingId = "e334cc64-6cc2-4193-92dd-237e38bab4a7",
+                    challengeResponseStatus = 403
                 })
                 assert.are.equal("ip_flagged,captcha_serve", ngx_mock.ctx.NetaceaState.bc_type)
                 assert.spy(ngx_mock.exit).was_not_called()
@@ -627,7 +649,8 @@ insulate("lua_resty_netacea", function()
                     mitigationEndpoint = "https://mitigation.example",
                     apiKey = "test-api-key",
                     cookieEncryptionKey = "test-cookie-encryption-key",
-                    enableCaptchaContentNegotiation = true
+                    enableCaptchaContentNegotiation = true,
+                    challengeResponseStatus = 403
                 })
 
                 mitigation_mock.getBestMitigation = spy.new(function()
@@ -637,7 +660,8 @@ insulate("lua_resty_netacea", function()
 
                 assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
                     enableCaptchaContentNegotiation = true,
-                    captchaPath = nil
+                    captchaPath = nil,
+                    challengeResponseStatus = 403
                 })
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
@@ -662,7 +686,8 @@ insulate("lua_resty_netacea", function()
                     apiKey = "test-api-key",
                     cookieEncryptionKey = "test-cookie-encryption-key",
                     enableCaptchaContentNegotiation = true,
-                    netaceaCaptchaPath = "/captcha"
+                    netaceaCaptchaPath = "/captcha",
+                    challengeResponseStatus = 403
                 })
 
                 mitigation_mock.getBestMitigation = spy.new(function()
@@ -673,7 +698,8 @@ insulate("lua_resty_netacea", function()
                 assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
                     enableCaptchaContentNegotiation = true,
                     netaceaCaptchaPath = "/captcha",
-                    captchaPath = "/captcha"
+                    captchaPath = "/captcha",
+                    challengeResponseStatus = 403
                 })
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
@@ -698,7 +724,8 @@ insulate("lua_resty_netacea", function()
                     apiKey = "test-api-key",
                     cookieEncryptionKey = "test-cookie-encryption-key",
                     enableCaptchaContentNegotiation = true,
-                    netaceaCaptchaPath = "/captcha"
+                    netaceaCaptchaPath = "/captcha",
+                    challengeResponseStatus = 403
                 })
 
                 mitigation_mock.getBestMitigation = spy.new(function()
@@ -709,7 +736,8 @@ insulate("lua_resty_netacea", function()
                 assert.spy(mitigation_mock.serveCaptcha).was.called_with('{"trackingId":"b0343c30-a382-42ad-9d65-fdb005fef054"}', {
                     enableCaptchaContentNegotiation = true,
                     netaceaCaptchaPath = "/captcha",
-                    captchaPath = "/captcha"
+                    captchaPath = "/captcha",
+                    challengeResponseStatus = 403
                 })
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
@@ -733,7 +761,8 @@ insulate("lua_resty_netacea", function()
                     mitigationEndpoint = "https://mitigation.example",
                     apiKey = "test-api-key",
                     cookieEncryptionKey = "test-cookie-encryption-key",
-                    enableCaptchaContentNegotiation = true
+                    enableCaptchaContentNegotiation = true,
+                    challengeResponseStatus = 403
                 })
 
                 mitigation_mock.getBestMitigation = spy.new(function()
@@ -744,7 +773,8 @@ insulate("lua_resty_netacea", function()
                 assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
                     enableCaptchaContentNegotiation = true,
                     netaceaCaptchaPath = nil,
-                    captchaPath = nil
+                    captchaPath = nil,
+                    challengeResponseStatus = 403
                 })
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
@@ -767,7 +797,8 @@ insulate("lua_resty_netacea", function()
                     mitigationEndpoint = "https://mitigation.example",
                     apiKey = "test-api-key",
                     cookieEncryptionKey = "test-cookie-encryption-key",
-                    netaceaCaptchaPath = "/captcha"
+                    netaceaCaptchaPath = "/captcha",
+                    challengeResponseStatus = 403
                 })
 
                 netacea:mitigate()
@@ -777,7 +808,8 @@ insulate("lua_resty_netacea", function()
                 assert.spy(mitigation_mock.serveCaptcha).was.called_with("<html>captcha</html>", {
                     enableCaptchaContentNegotiation = false,
                     netaceaCaptchaPath = "/captcha",
-                    captchaPath = "/captcha"
+                    captchaPath = "/captcha",
+                    challengeResponseStatus = 403
                 })
                 assert.spy(ngx_mock.exit).was_not_called()
             end)
