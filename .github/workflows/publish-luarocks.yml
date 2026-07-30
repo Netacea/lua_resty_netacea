@@ -36,6 +36,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y openresty zip luarocks
           echo "/usr/local/openresty/luajit/bin:/usr/local/openresty/nginx/sbin:/usr/local/openresty/bin" >> "$GITHUB_PATH"
+          # luarocks itself needs a JSON library for `luarocks upload`; the
+          # project's own lua-cjson dependency only lands in the throwaway
+          # test tree, not luarocks' own Lua environment.
+          sudo luarocks install dkjson
 
       - name: Verify the rockspec installs a working module
         run: ./test_rockspec_install.sh
