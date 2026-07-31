@@ -64,12 +64,9 @@ docker compose run --rm --build lint
 
 ## Updating the version number
 
-When releasing a new version, update all version references together:
+Run `./bump_version.sh <new-version>`, for example `./bump_version.sh 1.6.4`. It renames the rockspec, updates its `version = "..."` field, updates `_N._VERSION` in [`src/lua_resty_netacea.lua`](/home/user/github/lua_resty_netacea/src/lua_resty_netacea.lua), and finishes by running `check_rockspec_version.sh` to confirm everything agrees.
 
-1. Update [`src/lua_resty_netacea.lua`](/home/user/github/lua_resty_netacea/src/lua_resty_netacea.lua) and change `_N._VERSION` to the new library version, for example `1.2.2`.
-2. Rename the rockspec file to match the new release, for example `lua_resty_netacea-1.2.2-0.rockspec`.
-3. Update the `version = "..."` field inside the rockspec to the same value.
-4. Update any other hardcoded version references you introduce in future changes.
+If you introduce a new hardcoded version reference elsewhere, update `bump_version.sh` and `check_rockspec_version.sh` to cover it too, so a future bump can't miss it.
 
 `Dockerfile` and `Dockerfile.nginx_lua` pick up the rockspec via a `*.rockspec` glob, so they don't need updating for a version bump — as long as exactly one rockspec file exists in the repo root.
 
