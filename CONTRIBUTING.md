@@ -69,10 +69,9 @@ When releasing a new version, update all version references together:
 1. Update [`src/lua_resty_netacea.lua`](/home/user/github/lua_resty_netacea/src/lua_resty_netacea.lua) and change `_N._VERSION` to the new library version, for example `1.2.2`.
 2. Rename the rockspec file to match the new release, for example `lua_resty_netacea-1.2.2-0.rockspec`.
 3. Update the `version = "..."` field inside the rockspec to the same value.
-4. Update any build files that reference the rockspec filename:
-   - [`Dockerfile`](/home/user/github/lua_resty_netacea/Dockerfile)
-   - [`Dockerfile.nginx_lua`](/home/user/github/lua_resty_netacea/Dockerfile.nginx_lua)
-5. Update any other hardcoded version references you introduce in future changes.
+4. Update any other hardcoded version references you introduce in future changes.
+
+`Dockerfile` and `Dockerfile.nginx_lua` pick up the rockspec via a `*.rockspec` glob, so they don't need updating for a version bump — as long as exactly one rockspec file exists in the repo root.
 
 The package version and the rockspec version should stay in sync, with the rockspec using the `-0` release suffix.
 

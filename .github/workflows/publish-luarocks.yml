@@ -34,8 +34,12 @@ jobs:
           wget -O - https://openresty.org/package/pubkey.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openresty-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty-archive-keyring.gpg] http://openresty.org/package/ubuntu $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/openresty.list
           sudo apt-get update
-          sudo apt-get install -y openresty zip
+          sudo apt-get install -y openresty zip luarocks
           echo "/usr/local/openresty/luajit/bin:/usr/local/openresty/nginx/sbin:/usr/local/openresty/bin" >> "$GITHUB_PATH"
+          # luarocks itself needs a JSON library for `luarocks upload`; the
+          # project's own lua-cjson dependency only lands in the throwaway
+          # test tree, not luarocks' own Lua environment.
+          sudo luarocks install dkjson
 
       - name: Verify the rockspec installs a working module
         run: ./test_rockspec_install.sh
