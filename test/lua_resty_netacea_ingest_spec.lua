@@ -411,6 +411,15 @@ describe("lua_resty_netacea_ingest", function()
             assert.is.equal("monitor", queued_item.ProtectionMode)
         end)
 
+        it("should use the raw http_host header, including port, when present", function()
+            ngx_mock.var.http_host = "test.example.com:8443"
+
+            ingest:ingest()
+
+            local queued_item = ingest.data_queue:pop()
+            assert.is.equal("test.example.com:8443", queued_item.RequestHost)
+        end)
+
         it("should handle missing ngx.ctx.mitata by falling back to cookie", function()
             ngx_mock.ctx.mitata = nil
             

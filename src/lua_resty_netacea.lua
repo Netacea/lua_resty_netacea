@@ -8,7 +8,7 @@ local Constants = require("lua_resty_netacea_constants")
 local mitigation = require("lua_resty_netacea_mitigation")
 
 local _N = {}
-_N._VERSION = '1.6.3'
+_N._VERSION = '1.6.4'
 _N._TYPE = 'nginx'
 
 local ngx = require 'ngx'

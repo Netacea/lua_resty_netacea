@@ -241,7 +241,7 @@ function Ingest:ingest()
     IntegrationType = self._N._MODULE_TYPE,
     IntegrationVersion = self._N._MODULE_VERSION,
     Query = vars.query_string or "",
-    RequestHost = vars.host or "",
+    RequestHost = vars.http_host or vars.host or "",
     RequestId = vars.request_id or "",
     ProtectionMode = self._N.mitigationType or "ERROR",
     -- TODO
