@@ -102,7 +102,11 @@ end
 
 function _M.serveCaptcha(captchaBody, options)
   options = options or {}
-  ngx.status = ngx.HTTP_FORBIDDEN
+  local status = tonumber(options.challengeResponseStatus)
+  if not status or status < 100 or status > 599 or status % 1 ~= 0 then
+    status = ngx.HTTP_FORBIDDEN
+  end
+  ngx.status = status
   if shouldServeCaptchaAsJson(options.enableCaptchaContentNegotiation, options.netaceaCaptchaPath) then
     ngx.header["content-type"] = "application/json"
     ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
@@ -111,13 +115,13 @@ function _M.serveCaptcha(captchaBody, options)
       error("NETACEA CAPTCHA - missing trackingId for negotiated JSON response")
     end
     ngx.print(buildCaptchaJson(options.captchaPath, trackingId))
-    return ngx.exit(ngx.HTTP_OK)
+    return ngx.exit(status)
   end
 
   ngx.header["content-type"] = "text/html"
   ngx.header["Cache-Control"] = "max-age=0, no-cache, no-store, must-revalidate"
   ngx.print(captchaBody)
-  return ngx.exit(ngx.HTTP_OK)
+  return ngx.exit(status)
 end
 
 function _M.serveBlock(blockedResponseStatus, blockedResponseBody, blockedResponseContentType)

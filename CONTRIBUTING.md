@@ -64,17 +64,23 @@ docker compose run --rm --build lint
 
 ## Updating the version number
 
-When releasing a new version, update all version references together:
+Run `./bump_version.sh <new-version>`, for example `./bump_version.sh 1.6.4`. It renames the rockspec, updates its `version = "..."` field, updates `_N._VERSION` in [`src/lua_resty_netacea.lua`](/home/user/github/lua_resty_netacea/src/lua_resty_netacea.lua), and finishes by running `check_rockspec_version.sh` to confirm everything agrees.
 
-1. Update [`src/lua_resty_netacea.lua`](/home/user/github/lua_resty_netacea/src/lua_resty_netacea.lua) and change `_N._VERSION` to the new library version, for example `1.2.2`.
-2. Rename the rockspec file to match the new release, for example `lua_resty_netacea-1.2.2-0.rockspec`.
-3. Update the `version = "..."` field inside the rockspec to the same value.
-4. Update any build files that reference the rockspec filename:
-   - [`Dockerfile`](/home/user/github/lua_resty_netacea/Dockerfile)
-   - [`Dockerfile.nginx_lua`](/home/user/github/lua_resty_netacea/Dockerfile.nginx_lua)
-5. Update any other hardcoded version references you introduce in future changes.
+If you introduce a new hardcoded version reference elsewhere, update `bump_version.sh` and `check_rockspec_version.sh` to cover it too, so a future bump can't miss it.
+
+`Dockerfile` and `Dockerfile.nginx_lua` pick up the rockspec via a `*.rockspec` glob, so they don't need updating for a version bump — as long as exactly one rockspec file exists in the repo root.
 
 The package version and the rockspec version should stay in sync, with the rockspec using the `-0` release suffix.
+
+## Publishing to LuaRocks
+
+After bumping the version and pushing a matching git tag (e.g. `v1.6.0`):
+
+1. Sanity-check that the rockspec installs a working package with `./test_rockspec_install.sh`. This installs from the rockspec into a throwaway tree and confirms every module the library `require`s is actually included in `build.modules` — a rockspec can install without error while still shipping a broken package if a module is missing from that list.
+2. Publish by running the "lua-resty-netacea-publish-luarocks" GitHub Action (`workflow_dispatch`, passing the tag) or by publishing a GitHub Release for the tag, which triggers it automatically. It requires a `LUAROCKS_API_KEY` repository secret with upload rights to the `netacea` namespace on luarocks.org.
+3. To publish manually instead, run `LUAROCKS_API_KEY=... ./publish_to_luarocks.sh v1.6.0` from a checkout of that tag.
+
+The publish script uploads a copy of the rockspec with `source` pinned to the release tag rather than the `master` branch it tracks in git, so the published rock is built from the exact tagged commit.
 
 ## Security issues
 
