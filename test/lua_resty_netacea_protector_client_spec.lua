@@ -9,9 +9,11 @@ describe("lua_resty_netacea_protector_client", function()
     local http_mock_instance
     local http_mock
     local constants
+    local clock
 
     before_each(function()
         constants = require('lua_resty_netacea_constants')
+        clock = 1700000000.000
 
         ngx_mock = {
             ctx = {
@@ -26,6 +28,9 @@ describe("lua_resty_netacea_protector_client", function()
                 http_content_type = "application/json"
             },
             log = spy.new(function() end),
+            -- Each update_time advances the clock by 42ms, so every request takes 42ms
+            update_time = spy.new(function() clock = clock + 0.042 end),
+            now = spy.new(function() return clock end),
             ERR = 3,
             HTTP_FORBIDDEN = 403,
             HTTP_OK = 200
@@ -469,6 +474,51 @@ describe("lua_resty_netacea_protector_client", function()
             client:getCaptchaPage(nil)
             local call_args = http_mock_instance.request_uri.calls[1]
             assert.are.equal("https://endpoint1.example.com/captcha", call_args.vals[2])
+        end)
+    end)
+    describe("protector status and latency", function()
+        local function new_client()
+            return ProtectorClient:new({
+                apiKey = "test-api-key",
+                mitigationEndpoint = { "https://endpoint1.example.com" }
+            })
+        end
+
+        it("should record status and latency for checkReputation", function()
+            new_client():checkReputation()
+            assert.are.equal(200, ngx_mock.ctx.NetaceaState.protector_status)
+            assert.are.equal(42, ngx_mock.ctx.NetaceaState.protector_latency_ms)
+        end)
+
+        it("should record status and latency for validateCaptcha", function()
+            http_mock_instance.request_uri = spy.new(function()
+                return { status = 502, body = "Bad Gateway", headers = {} }, nil
+            end)
+            new_client():validateCaptcha("captcha_data")
+            assert.are.equal(502, ngx_mock.ctx.NetaceaState.protector_status)
+            assert.are.equal(42, ngx_mock.ctx.NetaceaState.protector_latency_ms)
+        end)
+
+        it("should record status and latency for getCaptchaPage", function()
+            new_client():getCaptchaPage(nil)
+            assert.are.equal(200, ngx_mock.ctx.NetaceaState.protector_status)
+            assert.are.equal(42, ngx_mock.ctx.NetaceaState.protector_latency_ms)
+        end)
+
+        for _, request_error in ipairs({ "timeout", "connection refused" }) do
+            it("should record status 0 and latency when the request fails with " .. request_error, function()
+                http_mock_instance.request_uri = spy.new(function()
+                    return nil, request_error
+                end)
+                new_client():checkReputation()
+                assert.are.equal(0, ngx_mock.ctx.NetaceaState.protector_status)
+                assert.are.equal(42, ngx_mock.ctx.NetaceaState.protector_latency_ms)
+            end)
+        end
+
+        it("should refresh the cached time before and after the request", function()
+            new_client():checkReputation()
+            assert.spy(ngx_mock.update_time).was.called(2)
         end)
     end)
 end)
