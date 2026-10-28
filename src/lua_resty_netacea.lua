@@ -60,6 +60,11 @@ local function serveCaptchaFailOpen(body, options)
   return true
 end
 
+local function isPassThroughStatus(status)
+  if type(status) ~= 'number' then return false end
+  return (status >= 200 and status < 300) or (status >= 400 and status < 500)
+end
+
 local function readRequestBody()
   ngx.req.read_body()
 
@@ -301,21 +306,38 @@ function _N:handleCaptcha()
 
   local captcha_data = readRequestBody()
   local protector_result = self.protectorClient:validateCaptcha(captcha_data)
+  if not protector_result then
+    return ngx.exit(ngx.HTTP_BAD_GATEWAY)
+  end
   ngx.ctx.NetaceaState.protector_result = protector_result
   ngx.ctx.NetaceaState.grace_period = -1000
   ngx.log(ngx.DEBUG, "NETACEA CAPTCHA - protector result: ", cjson.encode(ngx.ctx.NetaceaState))
 
   -- Refresh session only when the captcha verification succeeded and this wasn't a checkpoint post
-  local isCheckpointPost = protector_result.captcha ~= Constants['checkpointStates'].POST
-  if protector_result.exit_status == 200 and isCheckpointPost then
+  local isCheckpointPost = protector_result.captcha == Constants['checkpointStates'].POST
+  if protector_result.exit_status == 200 and not isCheckpointPost then
     self:refreshSession(Constants['issueReasons'].CAPTCHA_POST)
   end
 
-  if protector_result.response and protector_result.response.body then
-    ngx.print(protector_result.response.body)
+  -- Only pass 2xx/4xx protector responses through; anything else becomes a generic 502
+  local status = protector_result.exit_status
+  if not isPassThroughStatus(status) then
+    return ngx.exit(ngx.HTTP_BAD_GATEWAY)
   end
 
-  ngx.exit(protector_result.exit_status)
+  local response = protector_result.response or {}
+  local headers = response.headers or {}
+  if headers['Content-Type'] then
+    ngx.header['Content-Type'] = headers['Content-Type']
+  end
+
+  -- Status must be set before printing, as the first print sends the response headers
+  ngx.status = status
+  if response.body then
+    ngx.print(response.body)
+  end
+
+  ngx.exit(status)
 end
 
 function _N:refreshIngestSession()

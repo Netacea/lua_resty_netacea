@@ -33,6 +33,7 @@ insulate("lua_resty_netacea", function()
                     set_header = spy.new(function() end)
                 },
                 HTTP_FORBIDDEN = 403,
+                HTTP_BAD_GATEWAY = 502,
                 DEBUG = 7,
                 WARN = 4,
                 ERR = 3
@@ -1069,6 +1070,163 @@ insulate("lua_resty_netacea", function()
                 )
                 assert.spy(ngx_mock.print).was.called_with("Captcha OK")
                 assert.spy(ngx_mock.exit).was.called_with(200)
+            end)
+
+            it("should NOT refresh cookies for a successful checkpoint post", function()
+                protector_client_instance.validateCaptcha = spy.new(function()
+                    return {
+                        match = "0",
+                        mitigate = "0",
+                        captcha = "7",
+                        exit_status = 200,
+                        captcha_cookie = "checkpoint-cookie-value",
+                        response = {
+                            body = "Checkpoint OK"
+                        }
+                    }
+                end)
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.are.same({}, ngx_mock.header["Set-Cookie"] or {})
+                assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
+                assert.spy(ngx_mock.print).was.called_with("Checkpoint OK")
+                assert.spy(ngx_mock.exit).was.called_with(200)
+            end)
+
+            it("should set the response status before printing the captcha response body", function()
+                protector_client_instance.validateCaptcha = spy.new(function()
+                    return {
+                        match = "0",
+                        mitigate = "0",
+                        captcha = "3",
+                        exit_status = 403,
+                        response = {
+                            body = "Unauthorized"
+                        }
+                    }
+                end)
+                local status_at_print
+                ngx_mock.print = spy.new(function()
+                    status_at_print = ngx_mock.status
+                end)
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.are.equal(403, status_at_print)
+                assert.spy(ngx_mock.print).was.called_with("Unauthorized")
+                assert.spy(ngx_mock.exit).was.called_with(403)
+            end)
+
+            it("should return the protector content type to the client", function()
+                protector_client_instance.validateCaptcha = spy.new(function()
+                    return {
+                        match = "0",
+                        mitigate = "0",
+                        captcha = "3",
+                        exit_status = 403,
+                        response = {
+                            body = '{"status":"failed"}',
+                            headers = {
+                                ['Content-Type'] = "application/json"
+                            }
+                        }
+                    }
+                end)
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.are.equal("application/json", ngx_mock.header['Content-Type'])
+                assert.spy(ngx_mock.print).was.called_with('{"status":"failed"}')
+            end)
+
+            it("should not set a content type when the protector does not return one", function()
+                protector_client_instance.validateCaptcha = spy.new(function()
+                    return {
+                        match = "0",
+                        mitigate = "0",
+                        captcha = "3",
+                        exit_status = 403,
+                        response = {
+                            body = "Unauthorized",
+                            headers = {}
+                        }
+                    }
+                end)
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.is_nil(ngx_mock.header['Content-Type'])
+            end)
+
+            for _, protector_status in ipairs({ 500, 502, 503, 302, 101 }) do
+                it("should return a generic HTTP_BAD_GATEWAY when the protector returns " .. protector_status, function()
+                    protector_client_instance.validateCaptcha = spy.new(function()
+                        return {
+                            match = "0",
+                            mitigate = "0",
+                            captcha = "0",
+                            exit_status = protector_status,
+                            response = {
+                                body = "protector internal error",
+                                headers = {
+                                    ['Content-Type'] = "text/plain"
+                                }
+                            }
+                        }
+                    end)
+                    local netacea = new_mitigation_enabled_netacea()
+
+                    netacea:handleCaptcha()
+
+                    assert.spy(ngx_mock.print).was_not_called()
+                    assert.is_nil(ngx_mock.header['Content-Type'])
+                    assert.spy(ngx_mock.exit).was.called_with(502)
+                end)
+            end
+
+            it("should return HTTP_BAD_GATEWAY when the captcha validation request fails", function()
+                protector_client_instance.validateCaptcha = spy.new(function()
+                    return nil
+                end)
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.spy(ngx_mock.print).was_not_called()
+                assert.spy(cookies_mock.generateNewCookieValue).was_not_called()
+                assert.spy(ngx_mock.exit).was.called_with(502)
+            end)
+
+            it("should keep session details for ingest when the captcha validation request fails", function()
+                cookies_mock.parseMitataCookie = spy.new(function()
+                    return {
+                        valid = true,
+                        user_id = "existing-user-id",
+                        data = {
+                            mat = "0",
+                            mit = "0",
+                            cap = "0"
+                        }
+                    }
+                end)
+                ngx_mock.var.cookie__mitata = "existing-session-cookie"
+                protector_client_instance.validateCaptcha = spy.new(function()
+                    return nil
+                end)
+                local netacea = new_mitigation_enabled_netacea()
+
+                netacea:handleCaptcha()
+
+                assert.are.equal("existing-user-id", ngx_mock.ctx.NetaceaState.UserId)
+                assert.are.equal("127.0.0.1", ngx_mock.ctx.NetaceaState.client)
+                assert.are.equal("Test-Agent", ngx_mock.ctx.NetaceaState.user_agent)
+                assert.are.equal("existing-session-cookie", ngx_mock.ctx.mitata)
+                assert.spy(ngx_mock.exit).was.called_with(502)
             end)
 
             it("should read captcha request bodies from the temporary file when needed", function()

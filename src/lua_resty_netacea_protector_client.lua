@@ -17,6 +17,24 @@ local function createHttpConnection()
   return hc
 end
 
+-- Makes the protector request, recording its status and latency for ingest.
+-- ngx.now() is cached per event loop tick, so refresh it around the request.
+local function timedRequest(hc, url, params)
+  ngx.update_time()
+  local start = ngx.now()
+  local res, err = hc:request_uri(url, params)
+  ngx.update_time()
+
+  local NetaceaState = ngx.ctx.NetaceaState
+  if NetaceaState then
+    -- 0 means no response was received, e.g. a timeout or refused connection
+    NetaceaState.protector_status = res and res.status or 0
+    NetaceaState.protector_latency_ms = math.floor((ngx.now() - start) * 1000 + 0.5)
+  end
+
+  return res, err
+end
+
 local function appendTrackingId(url, trackingId)
     if not trackingId then return url end
     local separator = url:find('?', 1, true) and '&' or '?'
@@ -77,7 +95,8 @@ function ProtectorClient:checkReputation()
     ngx.log(ngx.DEBUG, 'Netacea mitigation headers: ' .. require('cjson').encode(headers))
     self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
 
-    local res, err = hc:request_uri(
+    local res, err = timedRequest(
+        hc,
         self.mitigationEndpoint[self.endpointIndex + 1],
         {
         method = 'GET',
@@ -107,7 +126,8 @@ function ProtectorClient:validateCaptcha(captcha_data)
 
   self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
 
-  local res, err = hc:request_uri(
+  local res, err = timedRequest(
+    hc,
     self.mitigationEndpoint[self.endpointIndex + 1] .. '/AtaVerifyCaptcha',
     {
       method = 'POST',
@@ -145,7 +165,8 @@ function ProtectorClient:getCaptchaPage(trackingId)
   local headers = self:getMitigationRequestHeaders()
   self.endpointIndex = (self.endpointIndex + 1) % table.getn(self.mitigationEndpoint)
 
-  local res, err = hc:request_uri(
+  local res, err = timedRequest(
+    hc,
     appendTrackingId(self.mitigationEndpoint[self.endpointIndex + 1] .. '/captcha', trackingId),
     {
       method = 'GET',

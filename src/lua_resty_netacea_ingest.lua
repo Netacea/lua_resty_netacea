@@ -244,8 +244,10 @@ function Ingest:ingest()
     RequestHost = vars.http_host or vars.host or "",
     RequestId = vars.request_id or "",
     ProtectionMode = self._N.mitigationType or "ERROR",
-    -- TODO
-    BytesReceived = vars.bytes_received or 0, -- Doesn't seem to work
+    ProtectorStatus = NetaceaState.protector_status,
+    ProtectorLatencyMs = NetaceaState.protector_latency_ms,
+    -- $bytes_received only exists in the stream module; $request_length is the http equivalent
+    BytesReceived = tonumber(vars.request_length) or 0,
     NetaceaUserIdCookieStatus = 1,
     Optional = {}
   }
