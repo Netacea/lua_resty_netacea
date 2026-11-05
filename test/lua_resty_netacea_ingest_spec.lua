@@ -37,7 +37,7 @@ describe("lua_resty_netacea_ingest", function()
                 query_string = "param=value",
                 host = "test.example.com",
                 request_id = "req-12345",
-                bytes_received = "512",
+                request_length = "512",
                 cookie__mitata = "fallback_mitata"
             },
             log = spy.new(function() end),
@@ -409,6 +409,26 @@ describe("lua_resty_netacea_ingest", function()
             assert.is.equal("test.example.com", queued_item.RequestHost)
             assert.is.equal("req-12345", queued_item.RequestId)
             assert.is.equal("monitor", queued_item.ProtectionMode)
+            assert.is.equal(512, queued_item.BytesReceived)
+        end)
+
+        it("should include protector status and latency when a protector call was made", function()
+            ngx_mock.ctx.NetaceaState.protector_status = 502
+            ngx_mock.ctx.NetaceaState.protector_latency_ms = 37
+
+            ingest:ingest()
+
+            local queued_item = ingest.data_queue:pop()
+            assert.is.equal(502, queued_item.ProtectorStatus)
+            assert.is.equal(37, queued_item.ProtectorLatencyMs)
+        end)
+
+        it("should omit protector status and latency when no protector call was made", function()
+            ingest:ingest()
+
+            local queued_item = ingest.data_queue:pop()
+            assert.is_nil(queued_item.ProtectorStatus)
+            assert.is_nil(queued_item.ProtectorLatencyMs)
         end)
 
         it("should use the raw http_host header, including port, when present", function()
@@ -464,7 +484,7 @@ describe("lua_resty_netacea_ingest", function()
             ngx_mock.var.query_string = nil
             ngx_mock.var.host = nil
             ngx_mock.var.request_id = nil
-            ngx_mock.var.bytes_received = nil
+            ngx_mock.var.request_length = nil
             
             ingest:ingest()
             
